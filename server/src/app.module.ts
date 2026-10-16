@@ -29,6 +29,7 @@ import configuration from './config/configuration'
 import { AppcenterModule } from './modules/appcenter/appcenter.module'
 import { DemoModule } from './modules/demo/demo.module'
 import { MemberModule } from './modules/member/member.module'
+import { SubscriptionModule } from './modules/subscription/subscription.module'
 import { JwtAuthGuard } from './modules/system/guards/jwt-auth.guard'
 import { PermissionsGuard } from './modules/system/guards/permissions.guard'
 import { OperateLogInterceptor } from './modules/system/operate-log/operate-log.interceptor'
@@ -85,6 +86,8 @@ import { SystemModule } from './modules/system/system.module'
     AppcenterModule,
     // 终端用户：会员 / 凭证 / 双令牌、开放 API 认证（M2 密码先行）与管理端接口
     MemberModule,
+    // 订阅与支付：计划 / 订单状态机（M3 线下备案，在线渠道 M5）/ 订阅实例顺延与 introspect 真值
+    SubscriptionModule,
     // 开发示例：示例商品单表 CRUD（业务模块样板，接入权限注册表的多模块聚合）
     DemoModule,
   ],

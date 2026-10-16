@@ -74,6 +74,11 @@ function makeService(options: {
     recordSuccess: jest.fn(() => Promise.resolve()),
   }
   const loginLogService = { record: jest.fn() }
+  // subscription 域订阅段桩（M3 起真值注入；单测固定未订阅形态）
+  const subscriptionService = {
+    getIntrospectSegment: jest.fn(() =>
+      Promise.resolve({ subscribed: false, planName: null, periodType: null, expireAt: null })),
+  }
   const service = new MemberAuthService(
     dataSource as never,
     memberRepository as never,
@@ -82,8 +87,9 @@ function makeService(options: {
     tokenService as never,
     loginLockService as never,
     loginLogService as never,
+    subscriptionService as never,
   )
-  return { service, dataSource, memberRepository, credentialRepository, appRepository, tokenService, loginLockService, loginLogService, saved }
+  return { service, dataSource, memberRepository, credentialRepository, appRepository, tokenService, loginLockService, loginLogService, subscriptionService, saved }
 }
 
 const registerDto = { type: CREDENTIAL_TYPE.PASSWORD, identifier: 'newuser1', credential: 'pass1234' }
@@ -278,12 +284,13 @@ describe('MemberAuthService 绑定与校验', () => {
     })
   })
 
-  it('introspect 应返回会员身份与订阅占位（M2 固定 unsubscribed，主张 I6）', async () => {
-    const { service } = makeService({ app, member })
-    await expect(service.introspect(MEMBER_ID)).resolves.toEqual({
+  it('introspect 应返回会员身份并透传 subscription 域注入的订阅段（M3 真值，主张 I6/S10）', async () => {
+    const { service, subscriptionService } = makeService({ app, member })
+    await expect(service.introspect(MEMBER_ID, APP_KEY)).resolves.toEqual({
       member: { id: MEMBER_ID, nickname: '测试会员', avatarUrl: undefined, status: MEMBER_STATUS.ACTIVE },
-      subscription: { subscribed: false, planName: null, expireAt: null },
+      subscription: { subscribed: false, planName: null, periodType: null, expireAt: null },
     })
+    expect(subscriptionService.getIntrospectSegment).toHaveBeenCalledWith(MEMBER_ID, APP_KEY)
   })
 
   it('getActiveMemberById 对禁用会员应返回 null（逐请求查库的即时失效语义）', async () => {

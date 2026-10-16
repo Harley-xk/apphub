@@ -29,6 +29,6 @@ export class OpenMemberTokenController {
   @ApiOperation({ summary: '令牌在线校验（会员身份 + 订阅状态）' })
   @Get('introspect')
   async introspect(@CurrentMember() member: AuthMember): Promise<IntrospectVo> {
-    return this.authService.introspect(member.id)
+    return this.authService.introspect(member.id, member.appKey)
   }
 }

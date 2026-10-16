@@ -26,10 +26,13 @@ import { MemberEntity } from './entities/member.entity'
 import { MEMBER_MODULE_NAME, MEMBER_PERMISSIONS } from './permissions'
 import { DEFAULT_MEMBER_JWT_SECRET } from '../../config/configuration'
 import { AppEntity } from '../appcenter/entities/app.entity'
+import { SubscriptionModule } from '../subscription/subscription.module'
 import { PermissionRegistry } from '../system/permissions'
 
 @Module({
   imports: [
+    // SubscriptionModule 提供 introspect 订阅段真值（subscription 不反向依赖 member 服务，无循环）
+    SubscriptionModule,
     // AppEntity 供开放 API 链路解析应用（appKey → 应用 / 有效性），与 appcenter 共享仓储
     TypeOrmModule.forFeature([
       MemberEntity,

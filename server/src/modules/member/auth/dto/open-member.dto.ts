@@ -98,10 +98,11 @@ export interface IntrospectVo {
     avatarUrl: string | null
     status: string
   }
-  /** 订阅状态（M2 固定占位 unsubscribed，M3 订阅域上线后注入真值——主张 I6） */
+  /** 订阅状态（M3 起注入真值，periodType 补齐见订阅设计主张 S10） */
   subscription: {
     subscribed: boolean
     planName: string | null
+    periodType: string | null
     expireAt: string | null
   }
 }

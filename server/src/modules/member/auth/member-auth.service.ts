@@ -26,6 +26,7 @@ import { businessError } from '../../../common/exceptions/business-error'
 import type { ClientInfo } from '../../../common/utils/client-info'
 import { AppEntity } from '../../appcenter/entities/app.entity'
 import { AppcenterErrorCode } from '../../appcenter/error-codes'
+import { SubscriptionService } from '../../subscription/sub/subscription.service'
 import { MemberCredentialEntity } from '../entities/member-credential.entity'
 import { MemberLoginLogEntity } from '../entities/member-login-log.entity'
 import { MemberEntity } from '../entities/member.entity'
@@ -53,6 +54,7 @@ export class MemberAuthService {
     private readonly tokenService: MemberTokenService,
     private readonly loginLockService: LoginLockService,
     private readonly loginLogService: MemberLoginLogService,
+    private readonly subscriptionService: SubscriptionService,
   ) {}
 
   /** 注册（注册即登录）：唯一性含软删行（防抢注），member + credential 同事务落库 */
@@ -223,7 +225,7 @@ export class MemberAuthService {
   }
 
   /** 令牌在线校验（D7）：会员身份 + 订阅状态占位（M3 注入真值，主张 I6） */
-  async introspect(memberId: string): Promise<IntrospectVo> {
+  async introspect(memberId: string, appKey: string): Promise<IntrospectVo> {
     const member = await this.memberRepository.findOne({ where: { id: memberId } })
     if (!member) {
       throw businessError(MemberErrorCode.MEMBER_NOT_EXISTS.message, {
@@ -237,7 +239,8 @@ export class MemberAuthService {
         avatarUrl: member.avatarUrl,
         status: member.status,
       },
-      subscription: { subscribed: false, planName: null, expireAt: null },
+      // 订阅段真值由 subscription 域提供（M3 替换占位 I6；appKey 为令牌绑定应用，D19）
+      subscription: await this.subscriptionService.getIntrospectSegment(memberId, appKey),
     }
   }
 

@@ -15,6 +15,8 @@ import { MemberLoginLockEntity } from '../src/modules/member/entities/member-log
 import { MemberLoginLogEntity } from '../src/modules/member/entities/member-login-log.entity'
 import { MemberRefreshTokenEntity } from '../src/modules/member/entities/member-refresh-token.entity'
 import { MemberEntity } from '../src/modules/member/entities/member.entity'
+import { SubPlanEntity } from '../src/modules/subscription/entities/sub-plan.entity'
+import { SubscriptionEntity } from '../src/modules/subscription/entities/subscription.entity'
 
 // 开启签名验证：member 开放 API 挂 app 签名方案（@UseSignature('app')），全链路真实验签。
 // 全局标准密钥同时启用，用于验证「全局密钥签的请求不能过应用方案」（两套密钥域互不可串）
@@ -120,6 +122,12 @@ describe('MemberModule 开放 API (e2e)', () => {
   let app: INestApplication
   let server: Server
   let memberRepo: ReturnType<typeof makeWritableRepo<MemberEntity>>
+  let subPlanRepo: ReturnType<typeof makeMemoryRepo<SubPlanEntity>>
+  let subscriptionRepo: ReturnType<typeof makeMemoryRepo<SubscriptionEntity>>
+  const subPlans: Partial<SubPlanEntity>[] = [
+    { id: '00000000-0000-4000-8000-00000000sp01', appId: '00000000-0000-4000-8000-00000000m0a1', name: '专业版 · 年付', periodType: 'yearly', durationMonths: 12, price: 99000, originalPrice: null, status: 'on', sort: 0, remark: null },
+  ]
+  const subscriptionRows: Partial<SubscriptionEntity>[] = []
 
   /** 应用级签名请求：X-App-Key 头 + 按应用密钥签（GET 空 body 同样入签，主张 I1） */
   const appSigned = (
@@ -155,6 +163,9 @@ describe('MemberModule 开放 API (e2e)', () => {
     const credentialRepo = makeWritableRepo<MemberCredentialEntity>()
     const refreshRepo = makeWritableRepo<MemberRefreshTokenEntity>()
     const lockRepo = makeWritableRepo<MemberLoginLockEntity>()
+    // subscription 域只读桩：introspect 订阅段真值链路（M3，主张 I6/S10）
+    subPlanRepo = makeMemoryRepo<SubPlanEntity>(subPlans)
+    subscriptionRepo = makeMemoryRepo<SubscriptionEntity>(subscriptionRows)
 
     // register 走事务：manager.save 按实体类分桶写入内存仓储（镜像 TypeORM 回填主键行为）
     const memberDataSource = {
@@ -178,6 +189,10 @@ describe('MemberModule 开放 API (e2e)', () => {
       .useValue(refreshRepo)
       .overrideProvider(getRepositoryToken(MemberLoginLockEntity))
       .useValue(lockRepo)
+      .overrideProvider(getRepositoryToken(SubPlanEntity))
+      .useValue(subPlanRepo)
+      .overrideProvider(getRepositoryToken(SubscriptionEntity))
+      .useValue(subscriptionRepo)
       .overrideProvider(getRepositoryToken(MemberLoginLogEntity))
       .useValue({ insert: () => Promise.resolve() })
       .compile()
@@ -295,15 +310,41 @@ describe('MemberModule 开放 API (e2e)', () => {
       expect((res.body as ApiResponse<unknown>).code).toBe(400300004)
     })
 
-    it('introspect 返回会员身份与订阅占位（M2 固定 unsubscribed）', async () => {
+    it('introspect 返回会员身份与订阅段（M3 起真值注入，未订阅会员 periodType 字段结构就绪）', async () => {
       const res = await introspect(APP_A_KEY, APP_A_SECRET, accessToken).expect(200)
       const data = (res.body as ApiResponse<{
         member: { id: string, nickname: string, status: string }
-        subscription: { subscribed: boolean, planName: null, expireAt: null }
+        subscription: { subscribed: boolean, planName: string | null, periodType: string | null, expireAt: string | null }
       }>).data!
       expect(data.member.nickname).toMatch(/^用户[0-9a-f]{6}$|^e2e-昵称$/)
       expect(data.member.status).toBe('active')
-      expect(data.subscription).toEqual({ subscribed: false, planName: null, expireAt: null })
+      expect(data.subscription).toEqual({ subscribed: false, planName: null, periodType: null, expireAt: null })
+    })
+
+    it('订阅实例存在时 introspect 应反映真值（M3 验收项 1：备案 → introspect 秒级到账）', async () => {
+      // 注册新会员 → introspect 取 memberId → 桩入订阅实例（年付，未过期）→ 再 introspect 断言真值
+      const registered = await register(APP_A_KEY, APP_A_SECRET, 'e2esub01')
+      const token = (registered.body as ApiResponse<TokenPairBody>).data!.accessToken
+      const before = await introspect(APP_A_KEY, APP_A_SECRET, token).expect(200)
+      const memberId = ((before.body as ApiResponse<{ member: { id: string } }>).data!).member.id
+      expect(((before.body as ApiResponse<{ subscription: { subscribed: boolean } }>).data!).subscription.subscribed).toBe(false)
+
+      subscriptionRows.push({
+        id: '00000000-0000-4000-8000-00000000sb01',
+        memberId,
+        appId: '00000000-0000-4000-8000-00000000m0a1',
+        planId: '00000000-0000-4000-8000-00000000sp01',
+        startAt: new Date('2026-10-17T00:00:00Z'),
+        expireAt: new Date('2027-10-17T00:00:00Z'),
+        lastRenewAt: new Date('2026-10-17T00:00:00Z'),
+      })
+
+      const after = await introspect(APP_A_KEY, APP_A_SECRET, token).expect(200)
+      const segment = (after.body as ApiResponse<{ subscription: { subscribed: boolean, planName: string, periodType: string, expireAt: string } }>).data!.subscription
+      expect(segment.subscribed).toBe(true)
+      expect(segment.planName).toBe('专业版 · 年付')
+      expect(segment.periodType).toBe('yearly')
+      expect(segment.expireAt).toBe('2027-10-17T00:00:00.000Z')
     })
 
     it('access 携不一致 AppKey 头应拒绝（4003004）', async () => {

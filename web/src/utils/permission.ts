@@ -26,6 +26,9 @@ const DOMAIN_LABELS: Record<string, string> = {
   post: '岗位管理',
   'operate-log': '操作日志',
   'login-log': '登录日志',
+  app: '应用管理',
+  channel: '更新通道',
+  version: '版本管理',
   product: '商品管理',
 }
 

@@ -5,9 +5,11 @@
  * 描述: 菜单图标语义名 → Element Plus 图标组件映射（路由 meta.icon 的值为语义名，未命中兜底 Menu）
  */
 import {
+  Box,
   Collection,
   Document,
   Goods,
+  Grid,
   HomeFilled,
   Key,
   Menu,
@@ -34,6 +36,8 @@ const ICON_MAP: Record<string, Component> = {
   'operate-log': Document,
   'login-log': Key,
   online: Monitor,
+  appcenter: Box,
+  app: Grid,
   demo: Collection,
   product: Goods,
 }

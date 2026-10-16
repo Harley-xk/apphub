@@ -22,3 +22,11 @@ export function formatDateTime(timestamp: number | null | undefined): string {
 export function dateTimeFormatter({ cellValue }: { cellValue: number | null | undefined }): string {
   return formatDateTime(cellValue)
 }
+
+/** 分 → 元字符串（两位小数，订阅 / 订单价格均为分存储） */
+export function formatCentAmount(cent: number | null | undefined): string {
+  if (cent == null) {
+    return '-'
+  }
+  return (cent / 100).toFixed(2)
+}

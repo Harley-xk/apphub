@@ -10,6 +10,9 @@ import type { DataSourceOptions } from 'typeorm'
 /** JWT 开发默认密钥：本地零配置可跑；生产沿用该值时 SystemModule 启动 fail-fast（见 system.module.ts） */
 export const DEFAULT_JWT_SECRET = 'dev-jwt-secret-change-me'
 
+/** member 域 JWT 开发默认密钥：与 system 域相互独立（两套信任域，D18）；生产沿用时 MemberModule fail-fast */
+export const DEFAULT_MEMBER_JWT_SECRET = 'dev-member-jwt-secret-change-me'
+
 export default () => ({
   // 运行环境：development / test / production（DB_SYNC 收紧等安全开关按此判断）
   env: process.env.NODE_ENV ?? 'development',
@@ -24,6 +27,15 @@ export default () => ({
   user: {
     // 新建用户初始口令：不传口令创建时使用（批次五迁入参数表驱动）
     initPassword: process.env.USER_INIT_PASSWORD ?? 'admin123',
+  },
+  member: {
+    // 终端用户域独立签发密钥（与 system 域 JWT_SECRET 相互独立，统一认证设计 §4.1）；
+    // 生产必须配置独立 MEMBER_JWT_SECRET（MemberModule 启动校验）
+    jwtSecret: process.env.MEMBER_JWT_SECRET ?? DEFAULT_MEMBER_JWT_SECRET,
+    // access token 有效期（小时），默认 8h——与 system 域管理端令牌时效一致（主张 M1）
+    accessExpiresHours: parseInt(process.env.MEMBER_ACCESS_EXPIRES_HOURS ?? '8', 10),
+    // refresh token 有效期（天），默认 30d（统一认证设计 §2.3）
+    refreshExpiresDays: parseInt(process.env.MEMBER_REFRESH_EXPIRES_DAYS ?? '30', 10),
   },
   signature: {
     // 写方法签名校验开关：默认关闭（存量环境零影响），.env.example 模板值为 true 引导新项目启用

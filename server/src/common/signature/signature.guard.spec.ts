@@ -116,6 +116,16 @@ describe('SignatureGuard', () => {
     expect(registryGet).toHaveBeenCalledWith('openapi-xml')
   })
 
+  it('显式 @UseSignature 的 GET 请求也应验签（全方法语义，开放 API introspect 场景，主张 I1）', async () => {
+    const verify = jest.fn(() => undefined)
+    const scheme: SignatureScheme = { name: 'app', verify }
+    const { guard, registryGet } = createFixture({ schemeName: 'app', scheme })
+
+    await expect(guard.canActivate(createContext({ method: 'GET' }))).resolves.toBe(true)
+    expect(registryGet).toHaveBeenCalledWith('app')
+    expect(verify).toHaveBeenCalledTimes(1)
+  })
+
   it('方案未注册应抛 500（编程错误）并记录日志，而非静默放行', async () => {
     const { guard } = createFixture({ scheme: null as unknown as SignatureScheme })
 

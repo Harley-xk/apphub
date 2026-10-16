@@ -8,7 +8,9 @@
 import { Global, Logger, Module, OnModuleInit } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 
+import { AppSecretRegistry } from './app-secret.registry'
 import { NONCE_STORE, InMemoryNonceStore } from './nonce-store/in-memory-nonce-store'
+import { AppSignatureScheme } from './schemes/app-signature.scheme'
 import { StandardSignatureScheme } from './schemes/standard-signature.scheme'
 import { SignatureSchemeRegistry } from './signature-scheme.registry'
 import { SignatureGuard } from './signature.guard'
@@ -18,20 +20,24 @@ import { SignatureGuard } from './signature.guard'
   providers: [
     // nonce 防重放存储：默认内存实现，多实例部署时可经此 token 覆盖为集中式存储（如 Redis）
     { provide: NONCE_STORE, useClass: InMemoryNonceStore },
+    // 应用密钥源：业务模块（appcenter）启动期注册解析器（按 AppKey 查 AppSecret，D15/D17）
+    AppSecretRegistry,
     StandardSignatureScheme,
+    AppSignatureScheme,
     {
-      // 注册表：装配期注入标准方案；业务模块经 onModuleInit 注册自定义方案
+      // 注册表：装配期注入标准方案与应用方案；业务模块经 onModuleInit 注册自定义方案
       provide: SignatureSchemeRegistry,
-      useFactory: (standard: StandardSignatureScheme) => {
+      useFactory: (standard: StandardSignatureScheme, app: AppSignatureScheme) => {
         const registry = new SignatureSchemeRegistry()
         registry.register(standard)
+        registry.register(app)
         return registry
       },
-      inject: [StandardSignatureScheme],
+      inject: [StandardSignatureScheme, AppSignatureScheme],
     },
     SignatureGuard,
   ],
-  exports: [SignatureSchemeRegistry, NONCE_STORE],
+  exports: [SignatureSchemeRegistry, NONCE_STORE, AppSecretRegistry],
 })
 export class SignatureModule implements OnModuleInit {
   private readonly logger = new Logger(SignatureModule.name)

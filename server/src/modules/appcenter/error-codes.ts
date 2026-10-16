@@ -49,4 +49,6 @@ export const AppcenterErrorCode = {
   FRAMEWORK_ARTIFACT_MISSING: new ErrorCode(300400003, '框架产物缺失：electron 包须登记 sha512，tauri 包须登记 minisign 签名'),
   /** 包对象不存在（登记时 HeadObject 校验失败——未上传或对象键不符） */
   PACKAGE_OBJECT_NOT_EXISTS: new ErrorCode(300400004, '安装包对象不存在（尚未上传完成或对象键不符）'),
+  /** 包记录不存在 */
+  PACKAGE_NOT_EXISTS: new ErrorCode(300400005, '包记录不存在'),
 } as const

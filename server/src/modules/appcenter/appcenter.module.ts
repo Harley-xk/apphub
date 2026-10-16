@@ -17,6 +17,8 @@ import { AppChannelEntity } from './entities/app-channel.entity'
 import { AppPackageEntity } from './entities/app-package.entity'
 import { AppVersionEntity } from './entities/app-version.entity'
 import { AppEntity } from './entities/app.entity'
+import { PackageController } from './package/package.controller'
+import { PackageService } from './package/package.service'
 import { APPCENTER_MODULE_NAME, APPCENTER_PERMISSIONS } from './permissions'
 import { OssStorageService } from './storage/oss-storage.service'
 import { STORAGE_SERVICE } from './storage/storage.service'
@@ -27,11 +29,12 @@ import { VersionService } from './version/version.service'
 
 @Module({
   imports: [TypeOrmModule.forFeature([AppEntity, AppChannelEntity, AppVersionEntity, AppPackageEntity])],
-  controllers: [AppController, ChannelController, VersionController, VersionActionController],
+  controllers: [AppController, ChannelController, VersionController, VersionActionController, PackageController],
   providers: [
     AppService,
     ChannelService,
     VersionService,
+    PackageService,
     {
       // OSS 四项（region / bucket / AK / SK）齐备装配真实实现，否则未配置 stub（服务正常启动）
       provide: STORAGE_SERVICE,

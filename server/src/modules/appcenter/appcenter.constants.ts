@@ -55,6 +55,17 @@ export const STABLE_CHANNEL_CODE = 'stable'
 export const CHANNEL_STATUS = APP_STATUS
 
 /**
+ * electron-updater 清单的平台 → arch 固定映射（D24）：latest*.yml 为平台级 feed（URL 不含 arch），
+ * 按 electron-updater 默认拉取方取包——latest.yml→(windows,x64)、latest-mac.yml→(macos,universal)、
+ * latest-linux.yml→(linux,x64)，槽位无包即 404（设计 §3.4）
+ */
+export const ELECTRON_MANIFEST_ARCH: Readonly<Record<string, string>> = {
+  [PACKAGE_PLATFORM.WINDOWS]: PACKAGE_ARCH.X64,
+  [PACKAGE_PLATFORM.MACOS]: PACKAGE_ARCH.UNIVERSAL,
+  [PACKAGE_PLATFORM.LINUX]: PACKAGE_ARCH.X64,
+}
+
+/**
  * tauri-plugin-updater 的 target → (platform, arch) 映射（D24）：
  * 未识别的 target 由调用方按「无更新」处理（204）
  */

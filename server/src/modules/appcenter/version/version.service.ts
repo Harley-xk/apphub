@@ -196,6 +196,11 @@ export class VersionService {
     })
     if (versions.length === 0)
       return null
+    // web 平台无包记录（版本仅登记，更新检测只做提示，设计 §3.3）：版本本身即候选，跳过包过滤
+    if (input.platform === PACKAGE_PLATFORM.WEB) {
+      versions.sort((a, b) => rcompare(a.version, b.version))
+      return { version: versions[0], packages: [] }
+    }
     // 平台 + 架构匹配的包（arch 为 null 时须 IS NULL 匹配）
     const packages = await this.packageRepository.find({
       where: {

@@ -130,11 +130,9 @@ export class AppService {
     await this.appRepository.softRemove(app)
   }
 
-  /** 按 AppKey 查启用应用（开放 API 有效性校验用；软删行不可见） */
-  async findEnabledByAppKey(appKey: string): Promise<AppEntity | null> {
-    return this.appRepository.findOne({
-      where: { appKey, status: APP_STATUS.ENABLED },
-    })
+  /** 按 AppKey 查应用（开放 API 有效性校验与限流策略源用；不限状态——停用语义由开放层处理，软删行不可见） */
+  async findByAppKey(appKey: string): Promise<AppEntity | null> {
+    return this.appRepository.findOne({ where: { appKey } })
   }
 
   /** 按主键查应用：不存在（含已软删）抛 APP_NOT_EXISTS */

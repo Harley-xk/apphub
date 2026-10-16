@@ -20,6 +20,8 @@ import { AccessLogMiddleware } from './common/middleware/access-log.middleware'
 import { RequestContextMiddleware } from './common/middleware/request-context.middleware'
 import { SecurityHeadersMiddleware } from './common/middleware/security-headers.middleware'
 import { SnakeNamingStrategy } from './common/orm/snake-naming.strategy'
+import { RateLimitGuard } from './common/rate-limit/rate-limit.guard'
+import { RateLimitModule } from './common/rate-limit/rate-limit.module'
 import { SignatureGuard } from './common/signature/signature.guard'
 import { SignatureModule } from './common/signature/signature.module'
 import { AuditSubscriber } from './common/subscribers/audit.subscriber'
@@ -73,6 +75,8 @@ import { SystemModule } from './modules/system/system.module'
     }),
     // 签名机制：全局模块，提供方案注册表 / nonce 存储，并在启动期做密钥 fail-fast 校验
     SignatureModule,
+    // 开放 API 限流：全局模块，提供滑动窗口计数器与策略注册表（Guard 经 APP_GUARD 注册在下方 providers）
+    RateLimitModule,
     // 系统管理：认证 / 用户 / 角色 + 权限注册表（全局模块，导出 Guard 依赖的服务）
     SystemModule,
     // 开发示例：示例商品单表 CRUD（业务模块样板，接入权限注册表的多模块聚合）
@@ -94,6 +98,8 @@ import { SystemModule } from './modules/system/system.module'
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     // 全局权限守卫：@RequirePermissions 逐请求现查权限集合（无注解 = 仅需登录），排在认证之后
     { provide: APP_GUARD, useClass: PermissionsGuard },
+    // 全局限流守卫：@RateLimit 挂载的开放 API 按 AppKey + IP 滑动窗口限流（无标注接口零开销放行），排在权限之后
+    { provide: APP_GUARD, useClass: RateLimitGuard },
     AppService,
   ],
 })

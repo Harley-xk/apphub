@@ -33,6 +33,23 @@ export default () => ({
     // 签名有效时间窗（毫秒），默认 5 分钟；同时决定 nonce 防重放窗口（2 倍时间窗）
     expireMs: parseInt(process.env.SIGNATURE_EXPIRE_MS ?? String(5 * 60 * 1000), 10),
   },
+  rateLimit: {
+    // 开放 API 限流：按 AppKey + IP 滑动窗口（公开客户端阈值减半由 Guard 依据 app 表 client_type 判定）
+    limit: parseInt(process.env.RATE_LIMIT_LIMIT ?? '60', 10),
+    // 窗口长度（毫秒），默认 1 分钟
+    windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS ?? String(60 * 1000), 10),
+  },
+  oss: {
+    // 阿里云 OSS 对象存储（应用安装包分发，见 docs/应用管理平台/应用与版本管理设计.md §2.5）
+    // 六项齐备视为已配置；未配置时服务正常启动，存储相关接口返回「存储未配置」
+    region: process.env.OSS_REGION ?? '',
+    bucket: process.env.OSS_BUCKET ?? '',
+    accessKeyId: process.env.OSS_ACCESS_KEY_ID ?? '',
+    accessKeySecret: process.env.OSS_ACCESS_KEY_SECRET ?? '',
+    // STS 直传凭证签发用 RAM 角色与会话名（角色策略仅授 packages/* PutObject）
+    stsRoleArn: process.env.STS_ROLE_ARN ?? '',
+    stsSessionName: process.env.STS_SESSION_NAME ?? 'apphub-upload',
+  },
   database: {
     // 数据库类型：默认 postgres（首选），经 DB_TYPE 按项目需要切换（仅承诺主流数据库，不做国产适配）
     type: (process.env.DB_TYPE ?? 'postgres') as DataSourceOptions['type'],

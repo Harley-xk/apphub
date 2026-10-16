@@ -10,7 +10,7 @@ import { BaseEntity } from '../../../common/orm/base.entity'
 
 @Entity('app_channel')
 // 部分唯一索引：应用内通道 code 唯一（软删历史占位由应用层 withDeleted 查重覆盖，设计 §4.6）
-@Index('uk_app_channel_app_code', ['appId', 'code'], { where: 'deleted_at IS NULL' })
+@Index('uk_app_channel_app_code', ['appId', 'code'], { unique: true, where: 'deleted_at IS NULL' })
 export class AppChannelEntity extends BaseEntity {
   /** 所属应用 id */
   @Column({ type: 'uuid' })

@@ -10,7 +10,7 @@ import { BaseEntity } from '../../../common/orm/base.entity'
 
 @Entity('app_version')
 // 部分唯一索引：通道内版本号唯一（软删历史占位由应用层 withDeleted 查重覆盖，设计 §4.6——软删后版本号不可复用）
-@Index('uk_app_version_scope', ['appId', 'channelId', 'version'], { where: 'deleted_at IS NULL' })
+@Index('uk_app_version_scope', ['appId', 'channelId', 'version'], { unique: true, where: 'deleted_at IS NULL' })
 export class AppVersionEntity extends BaseEntity {
   /** 所属应用 id */
   @Column({ type: 'uuid' })

@@ -10,7 +10,7 @@ import { BaseEntity } from '../../../common/orm/base.entity'
 
 @Entity('app_package')
 // 部分唯一索引：版本内平台+架构唯一（注意 PG 唯一索引对 NULL 不判等——arch 为 null 的组合须由应用层占用校验兜底）
-@Index('uk_app_package_scope', ['versionId', 'platform', 'arch'], { where: 'deleted_at IS NULL' })
+@Index('uk_app_package_scope', ['versionId', 'platform', 'arch'], { unique: true, where: 'deleted_at IS NULL' })
 export class AppPackageEntity extends BaseEntity {
   /** 所属版本 id */
   @Column({ type: 'uuid' })

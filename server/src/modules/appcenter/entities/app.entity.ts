@@ -10,7 +10,7 @@ import { BaseEntity } from '../../../common/orm/base.entity'
 
 @Entity('app')
 // 部分唯一索引：软删历史行不占位（app_key 随机生成冲突概率极低，生成侧查重兜底）
-@Index('uk_app_app_key', ['appKey'], { where: 'deleted_at IS NULL' })
+@Index('uk_app_app_key', ['appKey'], { unique: true, where: 'deleted_at IS NULL' })
 export class AppEntity extends BaseEntity {
   /** 应用标识：`ah_` + 16 位随机小写字母数字，创建时生成（展示与接口携带用） */
   @Column({ type: 'varchar', length: 32 })

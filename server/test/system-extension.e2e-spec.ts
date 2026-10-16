@@ -286,7 +286,7 @@ describe('SystemExtension (e2e)', () => {
       })
   })
 
-  it('权限点清单应返回注册表全集（30 项，角色分配弹窗数据源）', () => {
+  it('权限点清单应返回注册表全集（M1 appcenter 接入后 49 项，角色分配弹窗数据源）', () => {
     return request(server)
       .get('/api/system/permission/list')
       .set('Authorization', `Bearer ${adminToken}`)
@@ -294,7 +294,7 @@ describe('SystemExtension (e2e)', () => {
       .expect((res) => {
         const body = res.body as ApiResponse<PermissionPoint[]>
         expect(body.code).toBe(0)
-        expect(body.data?.length).toBe(34)
+        expect(body.data?.length).toBe(49)
         expect(body.data?.map(point => point.code)).toContain('system:dict:query')
         expect(body.data?.every(point => typeof point.label === 'string' && point.label.length > 0)).toBe(true)
       })

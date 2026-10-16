@@ -8,6 +8,10 @@ import { Module, OnModuleInit } from '@nestjs/common'
 import { TypeOrmModule } from '@nestjs/typeorm'
 
 import { PermissionRegistry } from '../system/permissions'
+import { AppController } from './app/app.controller'
+import { AppService } from './app/app.service'
+import { ChannelController } from './channel/channel.controller'
+import { ChannelService } from './channel/channel.service'
 import { AppChannelEntity } from './entities/app-channel.entity'
 import { AppPackageEntity } from './entities/app-package.entity'
 import { AppVersionEntity } from './entities/app-version.entity'
@@ -16,6 +20,8 @@ import { APPCENTER_MODULE_NAME, APPCENTER_PERMISSIONS } from './permissions'
 
 @Module({
   imports: [TypeOrmModule.forFeature([AppEntity, AppChannelEntity, AppVersionEntity, AppPackageEntity])],
+  controllers: [AppController, ChannelController],
+  providers: [AppService, ChannelService],
 })
 export class AppcenterModule implements OnModuleInit {
   // SystemModule 为 @Global 且导出 PermissionRegistry，业务模块直接注入（依赖方向：业务 → 系统）

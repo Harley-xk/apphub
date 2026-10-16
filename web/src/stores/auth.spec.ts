@@ -34,12 +34,12 @@ describe('认证状态机', () => {
     await auth.login('admin', 'admin123')
 
     expect(auth.token).toBe('jwt-1')
-    expect(localStorage.getItem('N1_TOKEN')).toBe('jwt-1')
+    expect(localStorage.getItem('APPHUB_TOKEN')).toBe('jwt-1')
     expect(auth.isLoggedIn).toBe(true)
   })
 
   it('token 应从 localStorage 恢复（会话保持）', () => {
-    localStorage.setItem('N1_TOKEN', 'restored-token')
+    localStorage.setItem('APPHUB_TOKEN', 'restored-token')
 
     const auth = useAuthStore()
 
@@ -48,7 +48,7 @@ describe('认证状态机', () => {
   })
 
   it('loadPermissionInfo 应一次拉齐用户、角色与权限并置 isLoaded', async () => {
-    localStorage.setItem('N1_TOKEN', 't')
+    localStorage.setItem('APPHUB_TOKEN', 't')
     getPermissionInfoApiMock.mockResolvedValue(ok({
       user: { id: 'u1', username: 'admin', nickname: '系统管理员' },
       roles: ['super_admin'],
@@ -65,7 +65,7 @@ describe('认证状态机', () => {
   })
 
   it('登出：后端失败也应清理本地态（无状态 JWT 清令牌即登出）', async () => {
-    localStorage.setItem('N1_TOKEN', 't')
+    localStorage.setItem('APPHUB_TOKEN', 't')
     logoutApiMock.mockRejectedValue(new Error('network'))
 
     const auth = useAuthStore()
@@ -76,7 +76,7 @@ describe('认证状态机', () => {
     expect(auth.token).toBe('')
     expect(auth.user).toBeNull()
     expect(auth.isLoaded).toBe(false)
-    expect(localStorage.getItem('N1_TOKEN')).toBeNull()
+    expect(localStorage.getItem('APPHUB_TOKEN')).toBeNull()
     expect(auth.isLoggedIn).toBe(false)
   })
 

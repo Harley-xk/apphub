@@ -16,7 +16,7 @@ import {
 /**
  * 批次五种子数据：部门 / 岗位 / 字典 / 参数 + admin 挂根部门（手写迁移承载，id 常量与代码同源）。
  *
- * - common_status 字典的 dictValue 用 'true' / 'false' 对接 n-1 的 boolean 状态语义
+ * - common_status 字典的 dictValue 用 'true' / 'false' 对接 apphub 的 boolean 状态语义
  *   （DictTag 直传 boolean 天然命中，表单侧用 el-switch 不走字典）
  * - 参数 system.user.init-password 是 UserService 初始口令三级兜底链的第一级
  */
@@ -28,7 +28,7 @@ export class SystemExtensionSeed1790585200000 implements MigrationInterface {
     await queryRunner.query(
       `INSERT INTO "system_dept" ("id", "name", "parent_id", "sort", "status")
        VALUES ($1, $2, $3, $4, $5)`,
-      [DEPT_ROOT_ID, 'n-1 科技有限公司', null, 0, true],
+      [DEPT_ROOT_ID, 'Apphub 科技有限公司', null, 0, true],
     )
     await queryRunner.query(
       `INSERT INTO "system_dept" ("id", "name", "parent_id", "sort", "status")

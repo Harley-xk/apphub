@@ -111,7 +111,7 @@ describe('http 鉴权注入与 401 处理', () => {
   })
 
   it('localStorage 持有 token 时请求应注入 Authorization 头', async () => {
-    localStorage.setItem('N1_TOKEN', 'jwt-abc')
+    localStorage.setItem('APPHUB_TOKEN', 'jwt-abc')
     const captured = captureAdapter()
 
     await http.get('/demo')
@@ -130,7 +130,7 @@ describe('http 鉴权注入与 401 处理', () => {
   })
 
   it('HTTP 401 应清 token、整页跳登录页（带 redirect）且 reject ApiError(401)', async () => {
-    localStorage.setItem('N1_TOKEN', 'expired-token')
+    localStorage.setItem('APPHUB_TOKEN', 'expired-token')
     // 覆盖 window.location（jsdom 不执行真实导航），捕获整页跳转目标
     const fakeLocation = { pathname: '/home', search: '?tab=1', href: '' }
     vi.stubGlobal('location', fakeLocation)
@@ -149,7 +149,7 @@ describe('http 鉴权注入与 401 处理', () => {
     }
 
     await expect(http.get('/demo')).rejects.toMatchObject({ name: 'ApiError', code: 401 })
-    expect(localStorage.getItem('N1_TOKEN')).toBeNull()
+    expect(localStorage.getItem('APPHUB_TOKEN')).toBeNull()
     expect(fakeLocation.href).toBe('/login?redirect=' + encodeURIComponent('/home?tab=1'))
   })
 

@@ -56,7 +56,7 @@ export const http = axios.create({
 http.interceptors.request.use((config) => {
   // token 直读 localStorage（不经 auth store，避免拦截器与 store 的循环依赖）；
   // 401 整页跳转后 store 随页面重建，内存镜像无需在此同步清理
-  const token = localStorage.getItem('N1_TOKEN')
+  const token = localStorage.getItem('APPHUB_TOKEN')
   if (token)
     config.headers.set('Authorization', `Bearer ${token}`)
 

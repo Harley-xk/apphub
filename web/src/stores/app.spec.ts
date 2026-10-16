@@ -15,15 +15,15 @@ describe('应用外观状态', () => {
 
     app.setTheme('dark')
     expect(document.documentElement.classList.contains('dark')).toBe(true)
-    expect(localStorage.getItem('N1_APP')).toContain('"theme":"dark"')
+    expect(localStorage.getItem('APPHUB_APP')).toContain('"theme":"dark"')
 
     app.setTheme('light')
     expect(document.documentElement.classList.contains('dark')).toBe(false)
-    expect(localStorage.getItem('N1_APP')).toContain('"theme":"light"')
+    expect(localStorage.getItem('APPHUB_APP')).toContain('"theme":"light"')
   })
 
   it('设置随 localStorage 恢复（主题与手动收起）', () => {
-    localStorage.setItem('N1_APP', JSON.stringify({ theme: 'dark', sidebarCollapsed: true }))
+    localStorage.setItem('APPHUB_APP', JSON.stringify({ theme: 'dark', sidebarCollapsed: true }))
 
     const app = useAppStore()
 
@@ -33,7 +33,7 @@ describe('应用外观状态', () => {
   })
 
   it('脏数据兜底：非法主题回落浅色', () => {
-    localStorage.setItem('N1_APP', '{"theme":"blue","sidebarCollapsed":true}')
+    localStorage.setItem('APPHUB_APP', '{"theme":"blue","sidebarCollapsed":true}')
 
     const app = useAppStore()
 
@@ -49,7 +49,7 @@ describe('应用外观状态', () => {
     app.toggleSidebar()
     expect(app.sidebarCollapsed).toBe(true)
     expect(app.effectiveSidebarCollapsed).toBe(true)
-    expect(localStorage.getItem('N1_APP')).toContain('"sidebarCollapsed":true')
+    expect(localStorage.getItem('APPHUB_APP')).toContain('"sidebarCollapsed":true')
 
     // 窄屏下：手动展开也被强制收起
     app.toggleSidebar()

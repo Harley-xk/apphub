@@ -37,6 +37,6 @@ const router = useRouter()
   align-items: center;
   justify-content: center;
   min-height: 100vh;
-  background: var(--n1-canvas);
+  background: var(--apphub-canvas);
 }
 </style>

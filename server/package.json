@@ -1,7 +1,7 @@
 {
   "name": "server",
   "version": "0.1.0",
-  "description": "n-1 后端服务（NestJS 11 + TypeORM + PostgreSQL）",
+  "description": "apphub 后端服务（NestJS 11 + TypeORM + PostgreSQL）",
   "private": true,
   "scripts": {
     "build": "nest build",

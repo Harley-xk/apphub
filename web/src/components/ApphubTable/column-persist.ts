@@ -7,8 +7,8 @@
 
 import { readLocalJson, writeLocalJson } from '@/utils/storage'
 
-/** localStorage 总 key（对齐 N1_TOKEN / N1_APP / N1_TAGS 命名惯例） */
-const STORAGE_KEY = 'N1_TABLE_COLS'
+/** localStorage 总 key（对齐 APPHUB_TOKEN / APPHUB_APP / APPHUB_TAGS 命名惯例） */
+const STORAGE_KEY = 'APPHUB_TABLE_COLS'
 
 /** 单个视图的列状态 */
 export interface TableColumnState {

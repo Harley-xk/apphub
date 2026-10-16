@@ -6,7 +6,7 @@
 -->
 <template>
   <el-dropdown trigger="click" @command="handleCommand">
-    <span class="n1-tool-btn" title="主题设置">
+    <span class="apphub-tool-btn" title="主题设置">
       <el-icon :size="16">
         <Brush />
       </el-icon>
@@ -41,21 +41,21 @@ function handleCommand(command: string | number | object): void {
 </script>
 
 <style scoped>
-.n1-tool-btn {
+.apphub-tool-btn {
   width: 32px;
   height: 32px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  color: var(--n1-text-2);
+  color: var(--apphub-text-2);
   cursor: pointer;
   outline: none;
   transition: background-color 0.2s;
 }
 
-.n1-tool-btn:hover {
-  background: var(--n1-fill-hover);
-  color: var(--n1-color-primary);
+.apphub-tool-btn:hover {
+  background: var(--apphub-fill-hover);
+  color: var(--apphub-color-primary);
 }
 </style>

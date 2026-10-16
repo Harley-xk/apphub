@@ -40,7 +40,7 @@
     </el-card>
 
     <el-card class="table-card">
-      <N1Table :columns="columns" :data="tableData" :loading="loading">
+      <ApphubTable :columns="columns" :data="tableData" :loading="loading">
         <template #logType="{ row }">
           <el-tag :type="row.logType === 10 ? 'primary' : 'info'" size="small">
             {{ row.logType === 10 ? '登录' : '登出' }}
@@ -65,7 +65,7 @@
             删除
           </el-button>
         </template>
-      </N1Table>
+      </ApphubTable>
 
       <el-pagination
         class="pagination-bar"
@@ -116,15 +116,15 @@ import { onMounted, reactive, ref } from 'vue'
 
 import type { LoginLogVO } from '@/api/system/login-log'
 import { deleteLoginLog, getLoginLogPage } from '@/api/system/login-log'
-import N1Table from '@/components/N1Table/index.vue'
-import type { N1TableColumn } from '@/components/N1Table/types'
+import ApphubTable from '@/components/ApphubTable/index.vue'
+import type { ApphubTableColumn } from '@/components/ApphubTable/types'
 import { dateTimeFormatter, formatDateTime } from '@/utils/format'
 
 // 与路由 name 对齐（keep-alive 缓存键契约）
 defineOptions({ name: 'SystemLoginLog' })
 
 /** 列定义（field 即列宽 / 列序持久化标识，设计见 docs/前端/表格组件设计.md） */
-const columns: N1TableColumn[] = [
+const columns: ApphubTableColumn[] = [
   { field: 'logType', title: '类型', width: 80, slot: 'logType' },
   { field: 'username', title: '登录账号', minWidth: 120 },
   { field: 'ip', title: '来源 IP', minWidth: 130, slot: 'ip' },

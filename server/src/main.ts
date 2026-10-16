@@ -41,9 +41,9 @@ async function bootstrap() {
   // Swagger 接口文档，通过 SWAGGER_ENABLED 环境变量控制开关
   if (configService.get<boolean>('swaggerEnabled')) {
     const swaggerConfig = new DocumentBuilder()
-      .setTitle('n-1 API')
+      .setTitle('Apphub API')
       .setDescription(
-        'n-1 企业级框架底座（vibe coding first）—— 接口文档。'
+        'apphub 企业级框架底座（vibe coding first）—— 接口文档。'
         + '所有接口响应统一包装为 { code, message, data } 结构，时间字段为毫秒 Unix 时间戳'
         + '（Swagger 展示的是解包前的 data 字段类型，见 docs/指南/统一响应与异常处理设计.md）',
       )

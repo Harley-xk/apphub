@@ -11,7 +11,7 @@ import { Injectable } from '@nestjs/common'
 export class AppService {
   getHello(): { name: string, version: string, docs: string } {
     return {
-      name: 'n-1 API',
+      name: 'Apphub API',
       version: '0.1.0',
       docs: '/api-docs',
     }

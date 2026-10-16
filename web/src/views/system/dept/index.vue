@@ -25,7 +25,7 @@
     </el-card>
 
     <el-card class="table-card">
-      <N1Table
+      <ApphubTable
         :columns="columns"
         :data="treeData"
         :loading="loading"
@@ -49,7 +49,7 @@
             删除
           </el-button>
         </template>
-      </N1Table>
+      </ApphubTable>
     </el-card>
 
     <DeptSaveDialog ref="saveDialogRef" @saved="loadTable" />
@@ -62,9 +62,9 @@ import { computed, onMounted, ref } from 'vue'
 
 import type { DeptVO } from '@/api/system/dept'
 import { deleteDept, getDeptList } from '@/api/system/dept'
+import ApphubTable from '@/components/ApphubTable/index.vue'
+import type { ApphubTableColumn } from '@/components/ApphubTable/types'
 import DictTag from '@/components/DictTag/index.vue'
-import N1Table from '@/components/N1Table/index.vue'
-import type { N1TableColumn } from '@/components/N1Table/types'
 import { dateTimeFormatter } from '@/utils/format'
 import DeptSaveDialog from '@/views/system/dept/components/DeptSaveDialog.vue'
 
@@ -77,7 +77,7 @@ interface DeptRow extends DeptVO {
 }
 
 /** 列定义（field 即列宽 / 列序持久化标识，设计见 docs/前端/表格组件设计.md） */
-const columns: N1TableColumn[] = [
+const columns: ApphubTableColumn[] = [
   { field: 'name', title: '部门名称', minWidth: 220 },
   { field: 'sort', title: '排序', width: 80 },
   { field: 'status', title: '状态', width: 80, slot: 'status' },

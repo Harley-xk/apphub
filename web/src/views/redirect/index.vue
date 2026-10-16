@@ -5,7 +5,7 @@
  * 描述: 刷新中转页：进入即原址 replace 返回（配合 refreshingName 缓存排除，实现当前页强制重建，见 docs/前端/布局与风格设计.md §3.5）
 -->
 <template>
-  <div class="n1-redirect" />
+  <div class="apphub-redirect" />
 </template>
 
 <script setup lang="ts">
@@ -22,7 +22,7 @@ router.replace({ path: `/${targetPath}`, query: route.query })
 </script>
 
 <style scoped>
-.n1-redirect {
+.apphub-redirect {
   height: 100%;
 }
 </style>

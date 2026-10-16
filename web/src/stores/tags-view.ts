@@ -36,7 +36,7 @@ export interface TagView {
   keepAlive: boolean
 }
 
-const TAGS_KEY = 'N1_TAGS'
+const TAGS_KEY = 'APPHUB_TAGS'
 
 /** 首页固定页签 */
 const HOME_PATH = '/home'

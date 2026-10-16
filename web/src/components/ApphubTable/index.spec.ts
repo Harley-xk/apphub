@@ -13,18 +13,18 @@ describe('loadColumnState', () => {
   })
 
   it('损坏 JSON 时返回 null 并顺带清除脏数据', () => {
-    localStorage.setItem('N1_TABLE_COLS', '{oops')
+    localStorage.setItem('APPHUB_TABLE_COLS', '{oops')
     expect(loadColumnState('SystemUser')).toBeNull()
-    expect(localStorage.getItem('N1_TABLE_COLS')).toBeNull()
+    expect(localStorage.getItem('APPHUB_TABLE_COLS')).toBeNull()
   })
 
   it('widths 缺失时按空对象兜底', () => {
-    localStorage.setItem('N1_TABLE_COLS', JSON.stringify({ SystemUser: { order: ['a'] } }))
+    localStorage.setItem('APPHUB_TABLE_COLS', JSON.stringify({ SystemUser: { order: ['a'] } }))
     expect(loadColumnState('SystemUser')).toEqual({ order: ['a'], widths: {} })
   })
 
   it('order 非数组时视为无效记录返回 null', () => {
-    localStorage.setItem('N1_TABLE_COLS', JSON.stringify({ SystemUser: { widths: { a: 100 } } }))
+    localStorage.setItem('APPHUB_TABLE_COLS', JSON.stringify({ SystemUser: { widths: { a: 100 } } }))
     expect(loadColumnState('SystemUser')).toBeNull()
   })
 })
@@ -84,7 +84,7 @@ describe('saveColumnState', () => {
 
   it('全部列都无 field 时不落盘', () => {
     saveColumnState('SystemUser', [{ resizeWidth: 100 }])
-    expect(localStorage.getItem('N1_TABLE_COLS')).toBeNull()
+    expect(localStorage.getItem('APPHUB_TABLE_COLS')).toBeNull()
   })
 })
 

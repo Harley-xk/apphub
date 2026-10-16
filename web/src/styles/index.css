@@ -18,13 +18,13 @@ body,
 }
 
 body {
-  font-family: var(--n1-font-family);
+  font-family: var(--apphub-font-family);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   font-size: 14px;
-  color: var(--n1-text-1);
+  color: var(--apphub-text-1);
   /* 画布：全应用底（顶栏透明浮于其上，侧栏与内容区为独立白卡片） */
-  background: var(--n1-canvas) fixed;
+  background: var(--apphub-canvas) fixed;
 }
 
 /* 页面通用容器：内容卡片内沿留白（区块卡另有自身内边距，两者合计控制内容缩进） */
@@ -41,7 +41,7 @@ body {
  * 内容卡片内的 el-card 自动扁平化：
  * 白卡片上的卡片去底色 / 边框 / 阴影，区块间以分割线区分（页面零模板改动）
  */
-.n1-content-card .el-card {
+.apphub-content-card .el-card {
   border: none;
   box-shadow: none;
   background: transparent;
@@ -49,26 +49,26 @@ body {
 }
 
 /* 区块卡内边距收敛（EP 默认 20px 与页面容器 padding 叠加后缩进过大） */
-.n1-content-card .el-card .el-card__body {
+.apphub-content-card .el-card .el-card__body {
   padding: 12px;
 }
 
-.n1-content-card .el-card + .el-card {
+.apphub-content-card .el-card + .el-card {
   margin-top: 8px;
-  border-top: 1px solid var(--n1-divider);
+  border-top: 1px solid var(--apphub-divider);
 }
 
 /* 需要保留卡片形态的页面（如概览大卡）加该类还原 */
-.n1-page-card .el-card {
-  border: 1px solid var(--n1-border);
-  box-shadow: var(--n1-card-shadow);
-  background: var(--n1-card-bg);
-  border-radius: var(--n1-radius);
+.apphub-page-card .el-card {
+  border: 1px solid var(--apphub-border);
+  box-shadow: var(--apphub-card-shadow);
+  background: var(--apphub-card-bg);
+  border-radius: var(--apphub-radius);
 }
 
-.n1-page-card .el-card + .el-card {
+.apphub-page-card .el-card + .el-card {
   margin-top: 0;
-  border-top: 1px solid var(--n1-border);
+  border-top: 1px solid var(--apphub-border);
 }
 
 /* 管理页查询行：末项右对齐放置主操作按钮（新增等） */

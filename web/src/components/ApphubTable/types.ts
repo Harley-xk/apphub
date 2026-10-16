@@ -2,16 +2,16 @@
  * 作者: Harley-xk
  * 创建: 2026-09-29
  *
- * 描述: N1Table 列定义类型——vxe-column 属性的声明式子集 + 插槽标记（设计见 docs/前端/表格组件设计.md §3.3）
+ * 描述: ApphubTable 列定义类型——vxe-column 属性的声明式子集 + 插槽标记（设计见 docs/前端/表格组件设计.md §3.3）
  */
 
 import type { VxeColumnPropTypes } from 'vxe-table'
 
 /**
- * N1Table 列定义
+ * ApphubTable 列定义
  * field 必填且页面内唯一（持久化与拖拽的列标识）；其余属性原样透传 vxe-column
  */
-export interface N1TableColumn {
+export interface ApphubTableColumn {
   /** 列标识（纯操作列统一 'action'） */
   field: string
   title?: string

@@ -2,7 +2,7 @@
  * 作者: Harley-xk
  * 创建: 2026-09-28
  *
- * 描述: 应用外观状态：主题（浅色/深色/跟随系统）、侧栏手动收起、窄屏断点（持久化 key N1_APP）
+ * 描述: 应用外观状态：主题（浅色/深色/跟随系统）、侧栏手动收起、窄屏断点（持久化 key APPHUB_APP）
  */
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
@@ -18,7 +18,7 @@ interface AppSettings {
   sidebarCollapsed: boolean
 }
 
-const SETTINGS_KEY = 'N1_APP'
+const SETTINGS_KEY = 'APPHUB_APP'
 
 /** 窄屏断点（≤992px 自动收起侧栏） */
 const NARROW_BREAKPOINT = '(max-width: 992px)'
@@ -62,7 +62,7 @@ export const useAppStore = defineStore('app', () => {
     writeLocalJson(SETTINGS_KEY, settings)
   }
 
-  /** 深色类落到 <html>（Element Plus 暗色变量与 --n1-* 深色套均以 html.dark 激活） */
+  /** 深色类落到 <html>（Element Plus 暗色变量与 --apphub-* 深色套均以 html.dark 激活） */
   function applyTheme(): void {
     document.documentElement.classList.toggle('dark', isDark.value)
   }

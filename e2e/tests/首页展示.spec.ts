@@ -10,7 +10,7 @@ test.beforeEach(async ({ page }) => {
 test.describe('首页展示', () => {
   test('标题与定位副标题可见', async ({ page }) => {
     await page.goto('/')
-    await expect(page.getByRole('heading', { name: 'n-1' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: '应用管理平台' })).toBeVisible()
     await expect(page.getByText('企业级全栈项目框架底座 · vibe coding first')).toBeVisible()
   })
 

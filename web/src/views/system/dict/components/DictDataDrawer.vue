@@ -31,7 +31,7 @@
         </el-form-item>
       </el-form>
 
-      <N1Table :columns="columns" :data="tableData" :loading="loading" persist-key="SystemDict:data">
+      <ApphubTable :columns="columns" :data="tableData" :loading="loading" persist-key="SystemDict:data">
         <template #status="{ row }">
           <DictTag type="common_status" :value="row.status" />
         </template>
@@ -52,7 +52,7 @@
             删除
           </el-button>
         </template>
-      </N1Table>
+      </ApphubTable>
 
       <el-pagination
         class="pagination-bar"
@@ -76,13 +76,13 @@ import { computed, reactive, ref } from 'vue'
 
 import type { DictDataVO, DictTypeVO } from '@/api/system/dict'
 import { deleteDictData, getDictDataPage } from '@/api/system/dict'
+import ApphubTable from '@/components/ApphubTable/index.vue'
+import type { ApphubTableColumn } from '@/components/ApphubTable/types'
 import DictTag from '@/components/DictTag/index.vue'
-import N1Table from '@/components/N1Table/index.vue'
-import type { N1TableColumn } from '@/components/N1Table/types'
 import DictDataSaveDialog from '@/views/system/dict/components/DictDataSaveDialog.vue'
 
 /** 列定义（抽屉内非页面级表格，持久化 key 显式指定，设计见 docs/前端/表格组件设计.md §4.2） */
-const columns: N1TableColumn[] = [
+const columns: ApphubTableColumn[] = [
   { field: 'sort', title: '排序', width: 70 },
   { field: 'label', title: '数据标签', minWidth: 120 },
   { field: 'dictValue', title: '数据键值', minWidth: 120 },

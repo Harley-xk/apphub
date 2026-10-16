@@ -18,7 +18,7 @@ export function formatDateTime(timestamp: number | null | undefined): string {
   )
 }
 
-/** N1Table / vxe-table 时间列通用 formatter（cellValue 为毫秒时间戳，签名适配 vxe formatter） */
+/** ApphubTable / vxe-table 时间列通用 formatter（cellValue 为毫秒时间戳，签名适配 vxe formatter） */
 export function dateTimeFormatter({ cellValue }: { cellValue: number | null | undefined }): string {
   return formatDateTime(cellValue)
 }

@@ -1,8 +1,8 @@
 <div align="center">
 
-# n-1
+# apphub · 应用管理平台
 
-**企业级全栈项目框架底座 · 为 vibe coding first 的 AI 编程范式而生**
+**多应用更新检测 · 用户统一认证授权 · 订阅管理**（基于企业级全栈底座二次开发）
 
 NestJS 11 · TypeORM · PostgreSQL ｜ Vue 3 · Pinia · Element Plus
 
@@ -14,7 +14,7 @@ NestJS 11 · TypeORM · PostgreSQL ｜ Vue 3 · Pinia · Element Plus
 
 ## 项目简介
 
-n-1 是一套**企业级全栈项目框架底座**，面向 **vibe coding first** 的 AI 编程范式：
+apphub 是一套**企业级全栈项目框架底座**，面向 **vibe coding first** 的 AI 编程范式：
 
 - **框架底座**：pnpm 单仓库（monorepo）管理前后端，开箱即用的开发、构建、测试、调试链路
 - **成熟技术栈**：全部选用经过大规模生产验证的开源框架，无自研魔改依赖，代码以 MIT 许可证开源共享
@@ -39,7 +39,7 @@ n-1 是一套**企业级全栈项目框架底座**，面向 **vibe coding first*
 ## 仓库结构
 
 ```text
-n-1/
+apphub/
 ├── server/               # 后端服务（NestJS 11 + TypeORM + PostgreSQL）
 │   ├── src/
 │   │   ├── common/       # 横切设施：拦截器 / 过滤器 / 守卫 / 中间件 / 审计 / 错误码 / 签名
@@ -84,7 +84,7 @@ n-1/
 
 ```bash
 # 1. 克隆仓库
-git clone <仓库地址> && cd n-1
+git clone <仓库地址> && cd apphub
 
 # 2. 安装依赖
 pnpm install
@@ -209,7 +209,7 @@ pnpm --filter server exec nest g resource modules/<领域>
 - [权限设计](docs/指南/权限设计.md) —— RBAC 权限点注册表、后端 Guard 链与前端三级权限过滤
 - [统一响应与异常处理设计](docs/指南/统一响应与异常处理设计.md) —— 九位分段错误码与全局异常处理
 - [请求签名验证设计](docs/指南/请求签名验证设计.md) —— 接口签名机制（Guard 链首环）
-- [布局与风格设计](docs/前端/布局与风格设计.md) —— 主布局系统与 `--n1-*` 设计 token / 明暗主题
+- [布局与风格设计](docs/前端/布局与风格设计.md) —— 主布局系统与 `--apphub-*` 设计 token / 明暗主题
 
 决策记录（ADR）见 [docs/决策/](docs/决策/)。
 

@@ -36,7 +36,7 @@ describe('serializeDates', () => {
     expect(serializeDates(null)).toBeNull()
     expect(serializeDates(undefined)).toBeUndefined()
 
-    const input = { name: 'n-1', version: '0.1.0' }
+    const input = { name: 'apphub', version: '0.1.0' }
     expect(serializeDates(input)).toEqual(input)
   })
 

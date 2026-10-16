@@ -5,14 +5,14 @@
  * 描述: 标签栏右侧默认组件（layout:tagsbar-right 槽位兜底）：刷新当前页 + 快捷关闭下拉
 -->
 <template>
-  <div class="n1-tags-actions">
-    <span class="n1-tags-action-btn" title="刷新当前页" @click="actions.refreshCurrent()">
+  <div class="apphub-tags-actions">
+    <span class="apphub-tags-action-btn" title="刷新当前页" @click="actions.refreshCurrent()">
       <el-icon :size="14">
         <RefreshRight />
       </el-icon>
     </span>
     <el-dropdown trigger="click" @command="handleCommand">
-      <span class="n1-tags-action-btn" title="快捷关闭">
+      <span class="apphub-tags-action-btn" title="快捷关闭">
         <el-icon :size="14">
           <ArrowDown />
         </el-icon>
@@ -48,28 +48,28 @@ function handleCommand(command: string | number | object): void {
 </script>
 
 <style scoped>
-.n1-tags-actions {
+.apphub-tags-actions {
   display: flex;
   align-items: center;
   gap: 4px;
   padding-left: 8px;
-  border-left: 1px solid var(--n1-divider);
+  border-left: 1px solid var(--apphub-divider);
 }
 
-.n1-tags-action-btn {
+.apphub-tags-action-btn {
   width: 24px;
   height: 24px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: 4px;
-  color: var(--n1-text-3);
+  color: var(--apphub-text-3);
   cursor: pointer;
   outline: none;
 }
 
-.n1-tags-action-btn:hover {
-  color: var(--n1-color-primary);
-  background: var(--n1-fill-hover);
+.apphub-tags-action-btn:hover {
+  color: var(--apphub-color-primary);
+  background: var(--apphub-fill-hover);
 }
 </style>

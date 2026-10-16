@@ -1,7 +1,7 @@
 {
   "name": "e2e",
   "version": "0.1.0",
-  "description": "n-1 浏览器端到端测试（Playwright，全链路验收：页面 → Vite 代理 → 后端 API）",
+  "description": "apphub 浏览器端到端测试（Playwright，全链路验收：页面 → Vite 代理 → 后端 API）",
   "private": true,
   "type": "module",
   "scripts": {

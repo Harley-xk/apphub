@@ -34,7 +34,7 @@ function makeService(options: { depts?: DeptRow[], hasUser?: boolean } = {}) {
 }
 
 // 组织：root(id=r) ← dev(id=d, parent=r)
-const ROOT: DeptRow = { id: 'r', name: 'n-1 科技', parentId: null }
+const ROOT: DeptRow = { id: 'r', name: 'apphub 科技', parentId: null }
 const DEV: DeptRow = { id: 'd', name: '研发部', parentId: 'r' }
 
 describe('DeptService 防环三态', () => {
@@ -63,7 +63,7 @@ describe('DeptService 防环三态', () => {
   it('上溯回到自身（父链成环）应抛 DEPT_PARENT_ERROR', async () => {
     // 把 root 挂到 dev 下：沿 dev → root 上溯即回到自身，成环
     const { service } = makeService({ depts: [ROOT, DEV] })
-    await expect(service.update({ id: 'r', name: 'n-1 科技', parentId: 'd' })).rejects.toMatchObject({
+    await expect(service.update({ id: 'r', name: 'apphub 科技', parentId: 'd' })).rejects.toMatchObject({
       code: SystemErrorCode.DEPT_PARENT_ERROR.code,
     })
   })

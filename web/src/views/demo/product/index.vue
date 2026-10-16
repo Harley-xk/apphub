@@ -50,7 +50,7 @@
     </el-card>
 
     <el-card class="table-card">
-      <N1Table :columns="columns" :data="tableData" :loading="loading">
+      <ApphubTable :columns="columns" :data="tableData" :loading="loading">
         <template #category="{ row }">
           <DictTag type="demo_product_category" :value="row.category" />
         </template>
@@ -65,7 +65,7 @@
             删除
           </el-button>
         </template>
-      </N1Table>
+      </ApphubTable>
 
       <el-pagination
         class="pagination-bar"
@@ -89,10 +89,10 @@ import { onMounted, reactive, ref } from 'vue'
 
 import type { ProductVO } from '@/api/demo/product'
 import { deleteProduct, getProductPage } from '@/api/demo/product'
+import ApphubTable from '@/components/ApphubTable/index.vue'
+import type { ApphubTableColumn } from '@/components/ApphubTable/types'
 import DictSelect from '@/components/DictSelect/index.vue'
 import DictTag from '@/components/DictTag/index.vue'
-import N1Table from '@/components/N1Table/index.vue'
-import type { N1TableColumn } from '@/components/N1Table/types'
 import { useDictStore } from '@/stores/dict'
 import { dateTimeFormatter } from '@/utils/format'
 import ProductSaveDialog from '@/views/demo/product/components/ProductSaveDialog.vue'
@@ -101,7 +101,7 @@ import ProductSaveDialog from '@/views/demo/product/components/ProductSaveDialog
 defineOptions({ name: 'DemoProduct' })
 
 /** 列定义（field 即列宽 / 列序持久化标识，设计见 docs/前端/表格组件设计.md） */
-const columns: N1TableColumn[] = [
+const columns: ApphubTableColumn[] = [
   { field: 'name', title: '商品名称', minWidth: 160 },
   { field: 'category', title: '分类', width: 100, slot: 'category' },
   { field: 'price', title: '金额（元）', width: 120, align: 'right', formatter: priceFormatter },

@@ -1,7 +1,7 @@
 // 全链路用例：批次六样板业务模块——开发示例分组、商品列表字典翻译（DictTag 分类 / 状态复用）、
 // 新增 / 编辑 / 删除闭环、搜索过滤与 keep-alive 载体。依赖后端与 PostgreSQL 就绪（种子账号
 // admin/admin123）；探测失败时整组自动跳过。写操作用例为「新建 → 验证 → 删除」闭环且名称带随机后缀，
-// 不污染种子数据。选择器约定同系统管理：表格行用 .vxe-body--row（列表表格统一 N1Table / vxe-table）；
+// 不污染种子数据。选择器约定同系统管理：表格行用 .vxe-body--row（列表表格统一 ApphubTable / vxe-table）；
 // el-select 非过滤态走表单项容器定位；行断言用 filter hasText，命中多行时取 first()
 import { expect, test } from '@playwright/test'
 
@@ -9,7 +9,7 @@ import { loginViaApi } from './support/auth'
 
 /** 页签元素定位（fullPath 为 data-fullpath 属性） */
 function tagOf(page: import('@playwright/test').Page, fullPath: string) {
-  return page.locator(`.n1-tag[data-fullpath="${fullPath}"]`)
+  return page.locator(`.apphub-tag[data-fullpath="${fullPath}"]`)
 }
 
 test.beforeEach(async ({ page, request }) => {

@@ -189,17 +189,17 @@ describe('多标签状态机', () => {
     expect(tagsView.cachedNames).toEqual(['DemoList'])
   })
 
-  it('持久化往返：变更即写 N1_TAGS，reset 清空', () => {
+  it('持久化往返：变更即写 APPHUB_TAGS，reset 清空', () => {
     const tagsView = useTagsViewStore()
     tagsView.addView(makeRoute())
 
-    expect(JSON.parse(localStorage.getItem('N1_TAGS') ?? '[]')).toHaveLength(2)
+    expect(JSON.parse(localStorage.getItem('APPHUB_TAGS') ?? '[]')).toHaveLength(2)
 
     tagsView.closeTab('/demo/product', '/home')
-    expect(JSON.parse(localStorage.getItem('N1_TAGS') ?? '[]')).toHaveLength(1)
+    expect(JSON.parse(localStorage.getItem('APPHUB_TAGS') ?? '[]')).toHaveLength(1)
 
     tagsView.reset()
-    expect(localStorage.getItem('N1_TAGS')).toBeNull()
+    expect(localStorage.getItem('APPHUB_TAGS')).toBeNull()
     expect(tagsView.isInitialized).toBe(false)
   })
 
@@ -234,7 +234,7 @@ describe('多标签状态机', () => {
       },
       { broken: true },
     ]
-    localStorage.setItem('N1_TAGS', JSON.stringify(saved))
+    localStorage.setItem('APPHUB_TAGS', JSON.stringify(saved))
     // resolve 按路径分叉：/gone 落 404 兜底，其余落在 Layout 下
     const resolve = vi.fn(({ path }: { path: string }) => {
       if (path === '/gone') {
@@ -258,6 +258,6 @@ describe('多标签状态机', () => {
     // 图标按当前路由表重算（不依赖持久化字段）
     expect(tagsView.views[1].icon).toBe('product')
     // 恢复后写回净化结果
-    expect(JSON.parse(localStorage.getItem('N1_TAGS') ?? '[]')).toHaveLength(2)
+    expect(JSON.parse(localStorage.getItem('APPHUB_TAGS') ?? '[]')).toHaveLength(2)
   })
 })

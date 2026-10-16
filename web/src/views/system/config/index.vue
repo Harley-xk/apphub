@@ -41,7 +41,7 @@
     </el-card>
 
     <el-card class="table-card">
-      <N1Table :columns="columns" :data="tableData" :loading="loading">
+      <ApphubTable :columns="columns" :data="tableData" :loading="loading">
         <template #configValue="{ row }">
           {{ row.visible ? row.configValue : '******' }}
         </template>
@@ -58,7 +58,7 @@
             删除
           </el-button>
         </template>
-      </N1Table>
+      </ApphubTable>
 
       <el-pagination
         class="pagination-bar"
@@ -82,8 +82,8 @@ import { onMounted, reactive, ref } from 'vue'
 
 import type { ConfigVO } from '@/api/system/config'
 import { deleteConfig, getConfigPage } from '@/api/system/config'
-import N1Table from '@/components/N1Table/index.vue'
-import type { N1TableColumn } from '@/components/N1Table/types'
+import ApphubTable from '@/components/ApphubTable/index.vue'
+import type { ApphubTableColumn } from '@/components/ApphubTable/types'
 import { dateTimeFormatter } from '@/utils/format'
 import ConfigSaveDialog from '@/views/system/config/components/ConfigSaveDialog.vue'
 
@@ -91,7 +91,7 @@ import ConfigSaveDialog from '@/views/system/config/components/ConfigSaveDialog.
 defineOptions({ name: 'SystemConfig' })
 
 /** 列定义（field 即列宽 / 列序持久化标识，设计见 docs/前端/表格组件设计.md） */
-const columns: N1TableColumn[] = [
+const columns: ApphubTableColumn[] = [
   { field: 'category', title: '参数分类', minWidth: 100 },
   { field: 'name', title: '参数名称', minWidth: 150 },
   { field: 'configKey', title: '参数键名', minWidth: 200 },

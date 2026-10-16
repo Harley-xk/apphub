@@ -32,14 +32,14 @@ import { useRoute } from 'vue-router'
 import type { VxeTablePropTypes } from 'vxe-table'
 
 import { applyColumnState, loadColumnState, saveColumnState } from './column-persist'
-import type { N1TableColumn } from './types'
+import type { ApphubTableColumn } from './types'
 
 // 命名对齐目录名（业务页手动 import）
-defineOptions({ name: 'N1Table' })
+defineOptions({ name: 'ApphubTable' })
 
 const props = defineProps<{
   /** 列定义（field 必填且唯一，持久化与拖拽的列标识） */
-  columns: N1TableColumn[]
+  columns: ApphubTableColumn[]
   /** 行数据 */
   data: unknown[]
   /** 加载中遮罩 */
@@ -92,7 +92,7 @@ const persistedState = loadColumnState(viewKey.value)
 const renderColumns = computed(() => applyColumnState(props.columns, persistedState))
 
 /** slot 为插槽标记而非 vxe-column 属性，剔除避免落到 DOM attribute */
-function colAttrs(col: N1TableColumn): Record<string, unknown> {
+function colAttrs(col: ApphubTableColumn): Record<string, unknown> {
   const attrs: Record<string, unknown> = { ...col }
   delete attrs.slot
   return attrs

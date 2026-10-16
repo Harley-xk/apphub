@@ -6,7 +6,7 @@ import { expect } from '@playwright/test'
 
 /** 纯前端用例的模拟登录态：token 预置 + get-permission-info 路由 mock（守卫拉取即命中） */
 export async function mockAuthState(page: Page): Promise<void> {
-  await page.addInitScript(() => localStorage.setItem('N1_TOKEN', 'e2e-mock-token'))
+  await page.addInitScript(() => localStorage.setItem('APPHUB_TOKEN', 'e2e-mock-token'))
   await page.route('**/api/system/auth/get-permission-info', (route) => {
     void route.fulfill({
       status: 200,
@@ -34,7 +34,7 @@ export async function loginViaApi(page: Page, request: APIRequestContext): Promi
   })
   expect(response.ok(), '种子账号 admin/admin123 登录应成功（需先执行迁移种子）').toBe(true)
   const { data } = await response.json() as { data: { token: string } }
-  await page.addInitScript(token => localStorage.setItem('N1_TOKEN', token), data.token)
+  await page.addInitScript(token => localStorage.setItem('APPHUB_TOKEN', token), data.token)
 }
 
 /** UI 表单登录（登录链路专用）：填账号口令并提交 */

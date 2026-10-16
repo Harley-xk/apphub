@@ -2,7 +2,7 @@
  * 作者: Harley-xk
  * 创建: 2026-09-28
  *
- * 描述: 登录页（根级路由，不进主布局）：账号口令登录，redirect 参数回带；青碧卡片浮起视觉（--n1-* token）
+ * 描述: 登录页（根级路由，不进主布局）：账号口令登录，redirect 参数回带；青碧卡片浮起视觉（--apphub-* token）
  * 文案契约（浏览器 e2e 依赖）：placeholder「请输入登录账号 / 请输入登录密码」、按钮「登 录」
 -->
 <script setup lang="ts">
@@ -51,9 +51,9 @@ async function handleLogin(): Promise<void> {
   <div class="login-page">
     <main class="login-card">
       <header class="login-brand">
-        <span class="login-logo">n1</span>
+        <span class="login-logo">A</span>
         <h1 class="login-title">
-          n-1
+          应用管理平台
         </h1>
         <p class="login-subtitle">
           企业级全栈项目框架底座
@@ -114,10 +114,10 @@ async function handleLogin(): Promise<void> {
   width: 380px;
   max-width: calc(100vw - 32px);
   padding: 36px 32px 32px;
-  background: var(--n1-card-bg);
-  border: 1px solid var(--n1-card-border);
-  border-radius: var(--n1-radius);
-  box-shadow: var(--n1-card-shadow);
+  background: var(--apphub-card-bg);
+  border: 1px solid var(--apphub-card-border);
+  border-radius: var(--apphub-radius);
+  box-shadow: var(--apphub-card-shadow);
 }
 
 .login-brand {
@@ -136,19 +136,19 @@ async function handleLogin(): Promise<void> {
   font-size: 18px;
   font-weight: 700;
   color: #fff;
-  background: var(--n1-color-primary);
+  background: var(--apphub-color-primary);
 }
 
 .login-title {
   margin: 12px 0 0;
   font-size: 22px;
-  color: var(--n1-text-1);
+  color: var(--apphub-text-1);
 }
 
 .login-subtitle {
   margin: 6px 0 0;
   font-size: 13px;
-  color: var(--n1-text-3);
+  color: var(--apphub-text-3);
 }
 
 .login-form {
@@ -164,7 +164,7 @@ async function handleLogin(): Promise<void> {
 
 .login-footer {
   font-size: 13px;
-  color: var(--n1-text-3);
+  color: var(--apphub-text-3);
   text-align: center;
 }
 

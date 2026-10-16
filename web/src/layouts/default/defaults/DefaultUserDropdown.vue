@@ -8,8 +8,8 @@
 <template>
   <el-dropdown class="user-entry" trigger="click" @command="handleCommand">
     <span class="user-trigger">
-      <span class="n1-avatar">{{ avatarText }}</span>
-      <span class="n1-user-name">{{ auth.user?.nickname ?? auth.user?.username ?? '未登录' }}</span>
+      <span class="apphub-avatar">{{ avatarText }}</span>
+      <span class="apphub-user-name">{{ auth.user?.nickname ?? auth.user?.username ?? '未登录' }}</span>
       <el-icon :size="12">
         <ArrowDown />
       </el-icon>
@@ -79,10 +79,10 @@ async function handleCommand(command: string | number | object): Promise<void> {
 }
 
 .user-trigger:hover {
-  background: var(--n1-fill-hover);
+  background: var(--apphub-fill-hover);
 }
 
-.n1-avatar {
+.apphub-avatar {
   width: 28px;
   height: 28px;
   display: inline-flex;
@@ -92,11 +92,11 @@ async function handleCommand(command: string | number | object): Promise<void> {
   font-size: 13px;
   font-weight: 600;
   color: #fff;
-  background: var(--n1-color-primary);
+  background: var(--apphub-color-primary);
 }
 
-.n1-user-name {
+.apphub-user-name {
   font-size: 13px;
-  color: var(--n1-text-1);
+  color: var(--apphub-text-1);
 }
 </style>

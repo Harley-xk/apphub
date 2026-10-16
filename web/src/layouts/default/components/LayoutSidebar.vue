@@ -5,8 +5,8 @@
  * 描述: 侧栏（白卡片，独立于画布）：静态路由生成的菜单递归渲染 + 底部扩展槽 + 收起开关，收起 / 展开随 app store 生效态
 -->
 <template>
-  <aside class="n1-sidebar" :class="{ collapsed: app.effectiveSidebarCollapsed }">
-    <el-scrollbar class="n1-sidebar-scroll">
+  <aside class="apphub-sidebar" :class="{ collapsed: app.effectiveSidebarCollapsed }">
+    <el-scrollbar class="apphub-sidebar-scroll">
       <el-menu
         :default-active="route.path"
         :collapse="app.effectiveSidebarCollapsed"
@@ -17,10 +17,10 @@
         <SideMenuItem :menus="menus" />
       </el-menu>
     </el-scrollbar>
-    <div class="n1-sidebar-bottom">
+    <div class="apphub-sidebar-bottom">
       <SlotRenderer :name="SLOT_KEYS.layoutSidebarBottom" />
       <div
-        class="n1-sidebar-collapse"
+        class="apphub-sidebar-collapse"
         :title="app.effectiveSidebarCollapsed ? '展开侧栏' : '收起侧栏'"
         @click="app.toggleSidebar()"
       >
@@ -58,81 +58,81 @@ const menus = computed(() => buildMenuTree(layoutChildren, '/', permission => au
 
 <style scoped>
 /* 侧栏白卡片：独立定界 */
-.n1-sidebar {
-  width: var(--n1-sidebar-width);
+.apphub-sidebar {
+  width: var(--apphub-sidebar-width);
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
   min-height: 0;
-  background: var(--n1-card-bg);
-  border: 1px solid var(--n1-card-border);
-  border-radius: var(--n1-radius);
-  box-shadow: var(--n1-card-shadow);
+  background: var(--apphub-card-bg);
+  border: 1px solid var(--apphub-card-border);
+  border-radius: var(--apphub-radius);
+  box-shadow: var(--apphub-card-shadow);
   transition: width 0.2s;
   overflow: hidden;
 }
 
-.n1-sidebar.collapsed {
-  width: var(--n1-sidebar-width-collapsed);
+.apphub-sidebar.collapsed {
+  width: var(--apphub-sidebar-width-collapsed);
 }
 
-.n1-sidebar-scroll {
+.apphub-sidebar-scroll {
   flex: 1;
   /* 菜单区左右留白（卡片内边距） */
   padding: 8px;
 }
 
-.n1-sidebar.collapsed .n1-sidebar-scroll {
+.apphub-sidebar.collapsed .apphub-sidebar-scroll {
   padding: 8px 4px;
 }
 
 /* 收起态下菜单项水平居中（仅剩图标，去掉层级缩进 padding）。
    一级叶子项的图标外层是 EP 的 tooltip trigger 包裹层（占满整项），须连同内层一起居中 */
-.n1-sidebar.collapsed :deep(.el-menu) {
+.apphub-sidebar.collapsed :deep(.el-menu) {
   width: 100%;
 }
 
-.n1-sidebar.collapsed :deep(.el-menu--collapse .el-menu-item),
-.n1-sidebar.collapsed :deep(.el-menu--collapse .el-sub-menu__title) {
+.apphub-sidebar.collapsed :deep(.el-menu--collapse .el-menu-item),
+.apphub-sidebar.collapsed :deep(.el-menu--collapse .el-sub-menu__title) {
   padding: 0;
   justify-content: center;
 }
 
-.n1-sidebar.collapsed :deep(.el-menu--collapse .el-menu-item .el-menu-tooltip__trigger) {
+.apphub-sidebar.collapsed :deep(.el-menu--collapse .el-menu-item .el-menu-tooltip__trigger) {
   justify-content: center;
 }
 
-.n1-sidebar-bottom {
+.apphub-sidebar-bottom {
   flex-shrink: 0;
   /* 与菜单区左右留白对齐 */
   padding: 4px 12px 12px;
 }
 
-.n1-sidebar.collapsed .n1-sidebar-bottom {
+.apphub-sidebar.collapsed .apphub-sidebar-bottom {
   padding: 4px 8px 12px;
 }
 
 /* 收起开关：与菜单项同规格的行按钮（hover 浅底圆角） */
-.n1-sidebar-collapse {
+.apphub-sidebar-collapse {
   height: 44px;
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 0 8px;
   border-radius: 6px;
-  color: var(--n1-text-2);
+  color: var(--apphub-text-2);
   cursor: pointer;
   transition:
     background-color 0.2s,
     color 0.2s;
 }
 
-.n1-sidebar-collapse:hover {
-  background: var(--n1-fill-hover);
-  color: var(--n1-color-primary);
+.apphub-sidebar-collapse:hover {
+  background: var(--apphub-fill-hover);
+  color: var(--apphub-color-primary);
 }
 
-.n1-sidebar.collapsed .n1-sidebar-collapse {
+.apphub-sidebar.collapsed .apphub-sidebar-collapse {
   justify-content: center;
   padding: 0;
 }

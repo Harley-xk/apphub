@@ -1,7 +1,7 @@
 {
   "name": "web",
   "version": "0.1.0",
-  "description": "n-1 前端应用（Vue 3 + Pinia + Element Plus）",
+  "description": "apphub 前端应用（Vue 3 + Pinia + Element Plus）",
   "private": true,
   "type": "module",
   "scripts": {

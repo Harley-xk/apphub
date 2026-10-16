@@ -50,7 +50,7 @@
     </el-card>
 
     <el-card class="table-card">
-      <N1Table :columns="columns" :data="tableData" :loading="loading">
+      <ApphubTable :columns="columns" :data="tableData" :loading="loading">
         <template #status="{ row }">
           <DictTag type="common_status" :value="row.status" />
         </template>
@@ -68,7 +68,7 @@
             删除
           </el-button>
         </template>
-      </N1Table>
+      </ApphubTable>
 
       <el-pagination
         class="pagination-bar"
@@ -93,10 +93,10 @@ import { onMounted, reactive, ref } from 'vue'
 
 import type { DictTypeVO } from '@/api/system/dict'
 import { deleteDictType, getDictTypePage } from '@/api/system/dict'
+import ApphubTable from '@/components/ApphubTable/index.vue'
+import type { ApphubTableColumn } from '@/components/ApphubTable/types'
 import DictSelect from '@/components/DictSelect/index.vue'
 import DictTag from '@/components/DictTag/index.vue'
-import N1Table from '@/components/N1Table/index.vue'
-import type { N1TableColumn } from '@/components/N1Table/types'
 import { dateTimeFormatter } from '@/utils/format'
 import DictDataDrawer from '@/views/system/dict/components/DictDataDrawer.vue'
 import DictTypeSaveDialog from '@/views/system/dict/components/DictTypeSaveDialog.vue'
@@ -105,7 +105,7 @@ import DictTypeSaveDialog from '@/views/system/dict/components/DictTypeSaveDialo
 defineOptions({ name: 'SystemDict' })
 
 /** 列定义（field 即列宽 / 列序持久化标识，设计见 docs/前端/表格组件设计.md） */
-const columns: N1TableColumn[] = [
+const columns: ApphubTableColumn[] = [
   { field: 'name', title: '字典名称', minWidth: 140 },
   { field: 'type', title: '类型标识', minWidth: 150 },
   { field: 'status', title: '状态', width: 80, slot: 'status' },

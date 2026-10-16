@@ -20,7 +20,7 @@ describe('AppController', () => {
   describe('getHello', () => {
     it('应返回应用名称与版本信息', () => {
       const result = appController.getHello()
-      expect(result.name).toBe('n-1 API')
+      expect(result.name).toBe('Apphub API')
       expect(result.docs).toBe('/api-docs')
     })
   })

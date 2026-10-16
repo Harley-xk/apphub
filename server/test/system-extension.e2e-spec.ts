@@ -63,7 +63,7 @@ const userRoles: Partial<UserRoleEntity>[] = [
 ]
 const rolePermissions: Partial<RolePermissionEntity>[] = []
 const depts: Partial<DeptEntity>[] = [
-  { id: DEPT_ROOT_ID, name: 'n-1 科技有限公司', parentId: null, sort: 0, status: true },
+  { id: DEPT_ROOT_ID, name: 'Apphub 科技有限公司', parentId: null, sort: 0, status: true },
   { id: DEPT_DEV_ID, name: '研发部', parentId: DEPT_ROOT_ID, sort: 1, status: true },
 ]
 const posts: Partial<PostEntity>[] = [
@@ -335,7 +335,7 @@ describe('SystemExtension (e2e)', () => {
         expect(body.code).toBe(0)
         const admin = body.data?.list.find(user => user.username === 'admin')
         expect(admin?.deptId).toBe(DEPT_ROOT_ID)
-        expect(admin?.deptName).toBe('n-1 科技有限公司')
+        expect(admin?.deptName).toBe('Apphub 科技有限公司')
         expect(admin?.postIds).toEqual([])
       })
   })

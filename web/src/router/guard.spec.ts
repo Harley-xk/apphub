@@ -74,7 +74,7 @@ describe('路由守卫 · 登录态与权限', () => {
   })
 
   it('已登录访问登录页应弹回首页', async () => {
-    localStorage.setItem('N1_TOKEN', 't')
+    localStorage.setItem('APPHUB_TOKEN', 't')
     const router = buildRouter()
 
     await router.push('/login')
@@ -83,7 +83,7 @@ describe('路由守卫 · 登录态与权限', () => {
   })
 
   it('登录后首次导航应拉取权限信息并放行无权限要求的页面', async () => {
-    localStorage.setItem('N1_TOKEN', 't')
+    localStorage.setItem('APPHUB_TOKEN', 't')
     const auth = useAuthStore()
     const router = buildRouter()
 
@@ -95,7 +95,7 @@ describe('路由守卫 · 登录态与权限', () => {
   })
 
   it('权限信息已加载后不再重复拉取（会话内一次）', async () => {
-    localStorage.setItem('N1_TOKEN', 't')
+    localStorage.setItem('APPHUB_TOKEN', 't')
     const router = buildRouter()
 
     await router.push('/home')
@@ -105,7 +105,7 @@ describe('路由守卫 · 登录态与权限', () => {
   })
 
   it('无权直链应跳 404（不泄露页面存在性）', async () => {
-    localStorage.setItem('N1_TOKEN', 't')
+    localStorage.setItem('APPHUB_TOKEN', 't')
     const router = buildRouter()
 
     await router.push('/secret')
@@ -114,7 +114,7 @@ describe('路由守卫 · 登录态与权限', () => {
   })
 
   it('持有 meta.permission 应放行', async () => {
-    localStorage.setItem('N1_TOKEN', 't')
+    localStorage.setItem('APPHUB_TOKEN', 't')
     grant(['system:secret'])
     const router = buildRouter()
 
@@ -145,7 +145,7 @@ describe('路由守卫 · 登录态与权限', () => {
   })
 
   it('权限信息拉取失败应清本地态并回登录页（401 已由 http 层整页接管，此处覆盖网络异常）', async () => {
-    localStorage.setItem('N1_TOKEN', 't')
+    localStorage.setItem('APPHUB_TOKEN', 't')
     getPermissionInfoApiMock.mockRejectedValue(new Error('network'))
     const auth = useAuthStore()
     const router = buildRouter()
@@ -153,7 +153,7 @@ describe('路由守卫 · 登录态与权限', () => {
     await router.push('/home')
 
     expect(auth.isLoggedIn).toBe(false)
-    expect(localStorage.getItem('N1_TOKEN')).toBeNull()
+    expect(localStorage.getItem('APPHUB_TOKEN')).toBeNull()
     expect(router.currentRoute.value.path).toBe('/login')
   })
 })

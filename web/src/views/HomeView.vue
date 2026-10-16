@@ -42,7 +42,7 @@ async function checkHealth() {
   <div class="page-container">
     <header class="home__header">
       <h1 class="home__title">
-        n-1
+        应用管理平台
       </h1>
       <p class="home__subtitle">
         企业级全栈项目框架底座 · vibe coding first
@@ -107,12 +107,12 @@ async function checkHealth() {
 .home__title {
   margin: 0;
   font-size: 24px;
-  color: var(--n1-text-1);
+  color: var(--apphub-text-1);
 }
 
 .home__subtitle {
   margin: 8px 0 0;
-  color: var(--n1-text-3);
+  color: var(--apphub-text-3);
   font-size: 14px;
 }
 

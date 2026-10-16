@@ -117,7 +117,7 @@ export class OperateLogInterceptor implements NestInterceptor {
   }
 
   /**
-   * 序列化请求参数：body + query + params 三合一（n-1 Controller 全部经三者取参）。
+   * 序列化请求参数：body + query + params 三合一（apphub Controller 全部经三者取参）。
    * 序列化时 password 键掩敏（安全考量）；JSON 失败（如循环引用）降级 util.inspect。
    */
   private formatParams(request: Request): string | null {

@@ -1,7 +1,7 @@
 // 全链路用例：批次五系统管理扩展——侧栏分组、用户页 CRUD 与分配角色回显、角色页分配权限分组勾选、
 // 字典数据抽屉 DictTag 渲染、登录日志首行。依赖后端与 PostgreSQL 就绪（种子账号 admin/admin123）；
 // 探测失败时整组自动跳过。写操作用例均为「新建 → 验证 → 删除」闭环，不污染种子数据
-// 选择器约定：表格行用 .vxe-body--row（列表表格统一 N1Table / vxe-table）；el-select 非过滤态无
+// 选择器约定：表格行用 .vxe-body--row（列表表格统一 ApphubTable / vxe-table）；el-select 非过滤态无
 // input placeholder 属性（定位走表单项容器）；el-checkbox 原生 input 为隐藏元素（点击走 label 文本，
 // 勾选态断言用 toBeChecked）；按钮 accessible name 源码原样
 import { expect, test } from '@playwright/test'

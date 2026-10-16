@@ -63,6 +63,6 @@ export function setupRouterGuard(router: Router): void {
 
     // RouteMeta.title 自动写页面标题
     const title = to.meta.title as string | undefined
-    document.title = title ? `${title} · n-1` : 'n-1'
+    document.title = title ? `${title} · 应用管理平台` : '应用管理平台'
   })
 }

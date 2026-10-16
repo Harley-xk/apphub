@@ -5,9 +5,9 @@
  * 描述: 多标签栏：白底细边框（上圆角与内容卡片连体），圆角块页签（激活主色浅底），右键菜单批量操作，左右扩展槽
 -->
 <template>
-  <div class="n1-tags-bar">
+  <div class="apphub-tags-bar">
     <SlotRenderer :name="SLOT_KEYS.layoutTagsbarLeft" />
-    <div ref="scrollRef" class="n1-tags-scroll" @wheel="onWheel">
+    <div ref="scrollRef" class="apphub-tags-scroll" @wheel="onWheel">
       <el-dropdown
         v-for="tab in tagsView.views"
         :key="tab.fullPath"
@@ -15,16 +15,16 @@
         @command="(command: string | number | object) => handleContextCommand(String(command), tab)"
       >
         <div
-          class="n1-tag"
+          class="apphub-tag"
           :class="{ active: tab.fullPath === route.fullPath }"
           :data-fullpath="tab.fullPath"
           @click="switchTab(tab)"
         >
-          <el-icon class="n1-tag-icon">
+          <el-icon class="apphub-tag-icon">
             <component :is="resolveMenuIcon(tab.icon)" />
           </el-icon>
-          <span class="n1-tag-title">{{ tab.title }}</span>
-          <el-icon v-if="!tab.affix" class="n1-tag-close" @click.stop="actions.closeTab(tab)">
+          <span class="apphub-tag-title">{{ tab.title }}</span>
+          <el-icon v-if="!tab.affix" class="apphub-tag-close" @click.stop="actions.closeTab(tab)">
             <Close />
           </el-icon>
         </div>
@@ -138,20 +138,20 @@ watch(
 
 <style scoped>
 /* 标签栏：白底细边框（左右上三边），下边由内容卡片补齐，拼为一张视觉卡片 */
-.n1-tags-bar {
-  height: var(--n1-tags-bar-height);
+.apphub-tags-bar {
+  height: var(--apphub-tags-bar-height);
   flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 8px;
-  background: var(--n1-card-bg);
-  border: 1px solid var(--n1-card-border);
+  background: var(--apphub-card-bg);
+  border: 1px solid var(--apphub-card-border);
   border-bottom: none;
-  border-radius: var(--n1-radius) var(--n1-radius) 0 0;
+  border-radius: var(--apphub-radius) var(--apphub-radius) 0 0;
   padding: 0 8px;
 }
 
-.n1-tags-scroll {
+.apphub-tags-scroll {
   flex: 1;
   min-width: 0;
   display: flex;
@@ -162,20 +162,20 @@ watch(
   scrollbar-width: none;
 }
 
-.n1-tags-scroll::-webkit-scrollbar {
+.apphub-tags-scroll::-webkit-scrollbar {
   display: none;
 }
 
 /* 页签：圆角浅底块（激活主色浅底 + 主色文字） */
-.n1-tag {
+.apphub-tag {
   height: 28px;
   display: inline-flex;
   align-items: center;
   gap: 4px;
   padding: 0 10px;
-  border-radius: var(--n1-radius-small);
+  border-radius: var(--apphub-radius-small);
   font-size: 12px;
-  color: var(--n1-text-2);
+  color: var(--apphub-text-2);
   cursor: pointer;
   white-space: nowrap;
   transition:
@@ -183,36 +183,36 @@ watch(
     color 0.2s;
 }
 
-.n1-tag:hover {
-  background: var(--n1-fill-hover);
-  color: var(--n1-color-primary);
+.apphub-tag:hover {
+  background: var(--apphub-fill-hover);
+  color: var(--apphub-color-primary);
 }
 
 /* 菜单图标：与侧栏共用语义映射，未激活时弱化 */
-.n1-tag-icon {
+.apphub-tag-icon {
   font-size: 13px;
-  color: var(--n1-text-3);
+  color: var(--apphub-text-3);
 }
 
-.n1-tag:hover .n1-tag-icon,
-.n1-tag.active .n1-tag-icon {
-  color: var(--n1-color-primary);
+.apphub-tag:hover .apphub-tag-icon,
+.apphub-tag.active .apphub-tag-icon {
+  color: var(--apphub-color-primary);
 }
 
-.n1-tag.active {
-  background: var(--n1-color-primary-bg-light);
-  color: var(--n1-color-primary);
+.apphub-tag.active {
+  background: var(--apphub-color-primary-bg-light);
+  color: var(--apphub-color-primary);
   font-weight: 500;
 }
 
-.n1-tag-close {
+.apphub-tag-close {
   font-size: 12px;
   border-radius: 50%;
-  color: var(--n1-text-3);
+  color: var(--apphub-text-3);
 }
 
-.n1-tag-close:hover {
-  color: var(--n1-text-1);
-  background: var(--n1-fill-hover);
+.apphub-tag-close:hover {
+  color: var(--apphub-text-1);
+  background: var(--apphub-fill-hover);
 }
 </style>

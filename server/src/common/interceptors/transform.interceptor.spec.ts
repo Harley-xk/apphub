@@ -26,7 +26,7 @@ describe('TransformInterceptor', () => {
 
   it('应将 200 响应的返回值包装为 { code: 0, data } 且不含 message 字段，并回填业务响应码', () => {
     const { context, request } = createContext(200)
-    const payload = { name: 'n-1 API', version: '0.1.0' }
+    const payload = { name: 'Apphub API', version: '0.1.0' }
 
     interceptor.intercept(context, callHandlerWith(payload)).subscribe((result) => {
       expect(result).toEqual({ code: 0, data: payload })

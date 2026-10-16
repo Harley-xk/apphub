@@ -30,7 +30,7 @@ app.use(createPinia())
 setupRouterGuard(router)
 app.use(router)
 app.use(ElementPlus, { locale: zhCn })
-// 表格组件 vxe-table（默认中文 locale），主题经 styles/vxe-overrides.css 对齐 --n1-* token
+// 表格组件 vxe-table（默认中文 locale），主题经 styles/vxe-overrides.css 对齐 --apphub-* token
 app.use(VxeUIAll).use(VxeUITable)
 // v-hasPermi 权限指令（页内按钮 / 区块粒度控制）
 app.directive('hasPermi', hasPermi)

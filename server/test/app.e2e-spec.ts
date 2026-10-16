@@ -48,7 +48,7 @@ describe('App (e2e)', () => {
       .expect((res) => {
         const body = res.body as ApiResponse<{ name: string }>
         expect(body.code).toBe(0)
-        expect(body.data?.name).toBe('n-1 API')
+        expect(body.data?.name).toBe('Apphub API')
       })
   })
 

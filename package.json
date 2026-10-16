@@ -1,8 +1,8 @@
 {
-  "name": "n-1",
+  "name": "apphub",
   "version": "0.1.0",
   "private": true,
-  "description": "n-1 —— 企业级全栈项目框架底座，面向 vibe coding first 的 AI 编程范式（Monorepo）",
+  "description": "apphub —— 应用管理平台（多应用更新检测 / 统一认证授权 / 订阅管理），基于企业级全栈底座（Monorepo）",
   "engines": {
     "node": ">=20.0.0"
   },

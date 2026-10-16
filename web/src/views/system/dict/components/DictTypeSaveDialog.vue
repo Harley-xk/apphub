@@ -130,7 +130,7 @@ defineExpose({ open })
 
 <style scoped>
 .form-tip {
-  color: var(--n1-text-color-secondary);
+  color: var(--apphub-text-color-secondary);
   display: block;
   font-size: 12px;
   line-height: 1.4;

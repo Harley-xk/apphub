@@ -19,7 +19,7 @@ export const SUPER_ADMIN_ROLE_CODE = 'super_admin'
 
 // ===== 批次五种子数据 id（SystemExtensionSeed 迁移静态写入，与代码约定同源） =====
 
-/** 根部门 id（种子：n-1 科技有限公司，parent 为 null） */
+/** 根部门 id（种子：Apphub 科技有限公司，parent 为 null） */
 export const DEPT_ROOT_ID = '00000000-0000-4000-8000-000000000011'
 
 /** 研发部 id（种子：挂根部门下） */

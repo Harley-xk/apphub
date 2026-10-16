@@ -36,7 +36,7 @@
     </el-card>
 
     <el-card class="table-card">
-      <N1Table :columns="columns" :data="tableData" :loading="loading">
+      <ApphubTable :columns="columns" :data="tableData" :loading="loading">
         <template #userName="{ row }">
           {{ row.userName ?? '-' }}
         </template>
@@ -61,7 +61,7 @@
             删除
           </el-button>
         </template>
-      </N1Table>
+      </ApphubTable>
 
       <el-pagination
         class="pagination-bar"
@@ -121,15 +121,15 @@ import { computed, onMounted, reactive, ref } from 'vue'
 
 import type { OperateLogVO } from '@/api/system/operate-log'
 import { deleteOperateLog, getOperateLogPage } from '@/api/system/operate-log'
-import N1Table from '@/components/N1Table/index.vue'
-import type { N1TableColumn } from '@/components/N1Table/types'
+import ApphubTable from '@/components/ApphubTable/index.vue'
+import type { ApphubTableColumn } from '@/components/ApphubTable/types'
 import { dateTimeFormatter, formatDateTime } from '@/utils/format'
 
 // 与路由 name 对齐（keep-alive 缓存键契约）
 defineOptions({ name: 'SystemOperateLog' })
 
 /** 列定义（field 即列宽 / 列序持久化标识，设计见 docs/前端/表格组件设计.md） */
-const columns: N1TableColumn[] = [
+const columns: ApphubTableColumn[] = [
   { field: 'userName', title: '操作人', minWidth: 110, slot: 'userName' },
   { field: 'module', title: '模块', minWidth: 100 },
   { field: 'name', title: '操作名', minWidth: 120 },
@@ -239,7 +239,7 @@ async function handleDelete(log: OperateLogVO): Promise<void> {
 }
 
 .json-pre {
-  background: var(--n1-fill-hover);
+  background: var(--apphub-fill-hover);
   border-radius: 4px;
   font-family: monospace;
   font-size: 12px;

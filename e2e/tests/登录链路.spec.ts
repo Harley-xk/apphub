@@ -15,7 +15,7 @@ test.describe('登录链路', () => {
     await loginViaUi(page, 'admin', 'admin123')
 
     // 落首页 + 顶栏用户区显示种子账号昵称（.user-entry 为选择器契约）
-    await expect(page.getByRole('heading', { name: 'n-1' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: '应用管理平台' })).toBeVisible()
     await expect(page.locator('.user-entry').getByText('系统管理员')).toBeVisible()
   })
 
@@ -42,7 +42,7 @@ test.describe('登录链路', () => {
   test('退出登录：确认后回登录页，再访问受保护页要求重新登录', async ({ page }) => {
     await page.goto('/login')
     await loginViaUi(page, 'admin', 'admin123')
-    await expect(page.getByRole('heading', { name: 'n-1' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: '应用管理平台' })).toBeVisible()
 
     // 用户下拉退出（confirm 确认）
     await page.locator('.user-entry').click()

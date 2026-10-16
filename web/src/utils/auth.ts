@@ -2,10 +2,10 @@
  * 作者: Harley-xk
  * 创建: 2026-09-28
  *
- * 描述: 登录令牌存取薄封装：N1_TOKEN 存纯字符串（头名与形态固定为 Authorization: Bearer，无需存对象）
+ * 描述: 登录令牌存取薄封装：APPHUB_TOKEN 存纯字符串（头名与形态固定为 Authorization: Bearer，无需存对象）
  */
 
-const TOKEN_KEY = 'N1_TOKEN'
+const TOKEN_KEY = 'APPHUB_TOKEN'
 
 /** 读取 token（未登录返回 null） */
 export function getToken(): string | null {

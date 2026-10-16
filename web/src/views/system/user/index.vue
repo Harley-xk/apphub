@@ -55,7 +55,7 @@
     </el-card>
 
     <el-card class="table-card">
-      <N1Table :columns="columns" :data="tableData" :loading="loading">
+      <ApphubTable :columns="columns" :data="tableData" :loading="loading">
         <template #status="{ row }">
           <DictTag type="common_status" :value="row.status" />
         </template>
@@ -93,7 +93,7 @@
             删除
           </el-button>
         </template>
-      </N1Table>
+      </ApphubTable>
 
       <el-pagination
         class="pagination-bar"
@@ -120,10 +120,10 @@ import type { DeptVO } from '@/api/system/dept'
 import { getDeptList } from '@/api/system/dept'
 import type { UserVO } from '@/api/system/user'
 import { deleteUser, getUserPage, resetUserPassword } from '@/api/system/user'
+import ApphubTable from '@/components/ApphubTable/index.vue'
+import type { ApphubTableColumn } from '@/components/ApphubTable/types'
 import DictSelect from '@/components/DictSelect/index.vue'
 import DictTag from '@/components/DictTag/index.vue'
-import N1Table from '@/components/N1Table/index.vue'
-import type { N1TableColumn } from '@/components/N1Table/types'
 import { dateTimeFormatter } from '@/utils/format'
 import UserRoleDialog from '@/views/system/user/components/UserRoleDialog.vue'
 import UserSaveDialog from '@/views/system/user/components/UserSaveDialog.vue'
@@ -132,7 +132,7 @@ import UserSaveDialog from '@/views/system/user/components/UserSaveDialog.vue'
 defineOptions({ name: 'SystemUser' })
 
 /** 列定义（field 即列宽 / 列序持久化标识，设计见 docs/前端/表格组件设计.md） */
-const columns: N1TableColumn[] = [
+const columns: ApphubTableColumn[] = [
   { field: 'username', title: '登录账号', minWidth: 120 },
   { field: 'nickname', title: '用户昵称', minWidth: 120 },
   { field: 'deptName', title: '所属部门', minWidth: 120 },

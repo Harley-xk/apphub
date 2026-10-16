@@ -28,6 +28,7 @@ import { AuditSubscriber } from './common/subscribers/audit.subscriber'
 import configuration from './config/configuration'
 import { AppcenterModule } from './modules/appcenter/appcenter.module'
 import { DemoModule } from './modules/demo/demo.module'
+import { MemberModule } from './modules/member/member.module'
 import { JwtAuthGuard } from './modules/system/guards/jwt-auth.guard'
 import { PermissionsGuard } from './modules/system/guards/permissions.guard'
 import { OperateLogInterceptor } from './modules/system/operate-log/operate-log.interceptor'
@@ -82,6 +83,8 @@ import { SystemModule } from './modules/system/system.module'
     SystemModule,
     // 应用中心：应用注册与凭证、版本发布、安装包管理与更新检测开放 API（M1）
     AppcenterModule,
+    // 终端用户：会员 / 凭证 / 双令牌、开放 API 认证（M2 密码先行）与管理端接口
+    MemberModule,
     // 开发示例：示例商品单表 CRUD（业务模块样板，接入权限注册表的多模块聚合）
     DemoModule,
   ],

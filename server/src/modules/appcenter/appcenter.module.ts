@@ -21,13 +21,17 @@ import { APPCENTER_MODULE_NAME, APPCENTER_PERMISSIONS } from './permissions'
 import { OssStorageService } from './storage/oss-storage.service'
 import { STORAGE_SERVICE } from './storage/storage.service'
 import { UnconfiguredStorageService } from './storage/unconfigured-storage.service'
+import { VersionActionController } from './version/version-action.controller'
+import { VersionController } from './version/version.controller'
+import { VersionService } from './version/version.service'
 
 @Module({
   imports: [TypeOrmModule.forFeature([AppEntity, AppChannelEntity, AppVersionEntity, AppPackageEntity])],
-  controllers: [AppController, ChannelController],
+  controllers: [AppController, ChannelController, VersionController, VersionActionController],
   providers: [
     AppService,
     ChannelService,
+    VersionService,
     {
       // OSS 四项（region / bucket / AK / SK）齐备装配真实实现，否则未配置 stub（服务正常启动）
       provide: STORAGE_SERVICE,

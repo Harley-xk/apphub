@@ -41,7 +41,8 @@ export default () => ({
   },
   oss: {
     // 阿里云 OSS 对象存储（应用安装包分发，见 docs/应用管理平台/应用与版本管理设计.md §2.5）
-    // 六项齐备视为已配置；未配置时服务正常启动，存储相关接口返回「存储未配置」
+    // 前四项齐备视为 OSS 已配置（未配置时服务正常启动，存储接口统一抛存储未配置错误）；
+    // 后两项 STS 仅直传凭证签发用，缺失时上传凭证接口单独拒绝
     region: process.env.OSS_REGION ?? '',
     bucket: process.env.OSS_BUCKET ?? '',
     accessKeyId: process.env.OSS_ACCESS_KEY_ID ?? '',

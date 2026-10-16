@@ -5,6 +5,7 @@
  * 描述: 应用中心模块：应用注册与凭证、更新通道、版本发布、安装包管理与更新检测开放 API（M1）
  */
 import { Module, OnModuleInit } from '@nestjs/common'
+import { ConfigService } from '@nestjs/config'
 import { TypeOrmModule } from '@nestjs/typeorm'
 
 import { PermissionRegistry } from '../system/permissions'
@@ -17,11 +18,35 @@ import { AppPackageEntity } from './entities/app-package.entity'
 import { AppVersionEntity } from './entities/app-version.entity'
 import { AppEntity } from './entities/app.entity'
 import { APPCENTER_MODULE_NAME, APPCENTER_PERMISSIONS } from './permissions'
+import { OssStorageService } from './storage/oss-storage.service'
+import { STORAGE_SERVICE } from './storage/storage.service'
+import { UnconfiguredStorageService } from './storage/unconfigured-storage.service'
 
 @Module({
   imports: [TypeOrmModule.forFeature([AppEntity, AppChannelEntity, AppVersionEntity, AppPackageEntity])],
   controllers: [AppController, ChannelController],
-  providers: [AppService, ChannelService],
+  providers: [
+    AppService,
+    ChannelService,
+    {
+      // OSS 四项（region / bucket / AK / SK）齐备装配真实实现，否则未配置 stub（服务正常启动）
+      provide: STORAGE_SERVICE,
+      useFactory: (configService: ConfigService) => {
+        const oss = configService.get<{
+          region: string
+          bucket: string
+          accessKeyId: string
+          accessKeySecret: string
+          stsRoleArn: string
+          stsSessionName: string
+        }>('oss')
+        if (oss?.region && oss.bucket && oss.accessKeyId && oss.accessKeySecret)
+          return new OssStorageService(oss)
+        return new UnconfiguredStorageService()
+      },
+      inject: [ConfigService],
+    },
+  ],
 })
 export class AppcenterModule implements OnModuleInit {
   // SystemModule 为 @Global 且导出 PermissionRegistry，业务模块直接注入（依赖方向：业务 → 系统）

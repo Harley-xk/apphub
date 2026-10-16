@@ -88,18 +88,30 @@
           <el-button v-hasPermi="'appcenter:app:update'" link type="primary" @click="openUpdate(row)">
             编辑
           </el-button>
-          <el-button v-hasPermi="'appcenter:channel:query'" link type="primary" @click="openChannelDrawer(row)">
-            通道
+          <el-button v-hasPermi="'appcenter:version:query'" link type="primary" @click="goVersion(row)">
+            版本
           </el-button>
-          <el-button v-hasPermi="'appcenter:app:reset-secret'" link type="warning" @click="handleResetSecret(row)">
-            重置凭证
-          </el-button>
-          <el-button v-hasPermi="'appcenter:app:update'" link type="primary" @click="handleToggleStatus(row)">
-            {{ row.status === 'enabled' ? '停用' : '启用' }}
-          </el-button>
-          <el-button v-hasPermi="'appcenter:app:remove'" link type="danger" @click="handleDelete(row)">
-            删除
-          </el-button>
+          <el-dropdown class="action-more" trigger="click" @command="(command: string) => handleMoreCommand(command, row)">
+            <el-button link type="primary">
+              更多
+            </el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="channel">
+                  更新通道
+                </el-dropdown-item>
+                <el-dropdown-item command="reset-secret">
+                  重置凭证
+                </el-dropdown-item>
+                <el-dropdown-item command="toggle-status">
+                  {{ row.status === 'enabled' ? '停用应用' : '启用应用' }}
+                </el-dropdown-item>
+                <el-dropdown-item command="remove" divided>
+                  删除应用
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
         </template>
       </ApphubTable>
 
@@ -124,6 +136,7 @@
 <script setup lang="ts">
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { onMounted, reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
 
 import type { AppCredentialVO, AppVO } from '@/api/appcenter/app'
 import { deleteApp, getAppPage, resetAppSecret, updateAppStatus } from '@/api/appcenter/app'
@@ -136,6 +149,8 @@ import AppSaveDialog from '@/views/appcenter/app/components/AppSaveDialog.vue'
 
 // 与路由 name 对齐（keep-alive 缓存键契约）
 defineOptions({ name: 'AppcenterApp' })
+
+const router = useRouter()
 
 /** 形态标签展示映射（后端取值域 desktop / web / mobile） */
 const APP_TYPE_LABELS: Record<string, string> = {
@@ -160,7 +175,7 @@ const columns: ApphubTableColumn[] = [
   { field: 'status', title: '状态', width: 80, slot: 'status' },
   { field: 'sort', title: '排序', width: 70 },
   { field: 'createTime', title: '创建时间', minWidth: 170, formatter: dateTimeFormatter },
-  { field: 'action', title: '操作', width: 280, fixed: 'right', slot: 'action' },
+  { field: 'action', title: '操作', width: 200, fixed: 'right', slot: 'action' },
 ]
 
 const loading = ref(false)
@@ -242,6 +257,23 @@ function handleCreated(credential: AppCredentialVO): void {
 
 function openChannelDrawer(app: AppVO): void {
   channelDrawerRef.value?.open(app)
+}
+
+/** 进入版本下钻页（hidden 路由，query.appId 携带应用上下文） */
+function goVersion(app: AppVO): void {
+  router.push({ path: '/appcenter/version', query: { appId: app.id } })
+}
+
+/** 操作列「更多」下拉分发 */
+function handleMoreCommand(command: string, app: AppVO): void {
+  if (command === 'channel')
+    openChannelDrawer(app)
+  else if (command === 'reset-secret')
+    handleResetSecret(app)
+  else if (command === 'toggle-status')
+    handleToggleStatus(app)
+  else if (command === 'remove')
+    handleDelete(app)
 }
 
 async function handleResetSecret(app: AppVO): Promise<void> {

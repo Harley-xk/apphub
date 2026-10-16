@@ -19,6 +19,7 @@
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",
     "@noble/hashes": "^2.4.0",
+    "ali-oss": "^6.23.0",
     "axios": "^1.7.9",
     "element-plus": "^2.14.5",
     "pinia": "^4.0.3",
@@ -30,6 +31,7 @@
   },
   "devDependencies": {
     "@stylistic/eslint-plugin": "^5.10.0",
+    "@types/ali-oss": "^6.23.3",
     "@types/node": "^22.20.3",
     "@vitejs/plugin-vue": "^6.0.9",
     "@vue/test-utils": "^2.5.1",

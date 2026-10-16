@@ -29,6 +29,8 @@ const DOMAIN_LABELS: Record<string, string> = {
   app: '应用管理',
   channel: '更新通道',
   version: '版本管理',
+  member: '会员管理',
+  credential: '会员凭证',
   product: '商品管理',
 }
 

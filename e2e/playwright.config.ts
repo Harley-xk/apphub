@@ -34,8 +34,17 @@ export default defineConfig({
     trace: 'on-first-retry',
   },
   projects: [
-    // Chrome 与 Edge 同为 Chromium 内核，共用 Desktop Chrome 设备描述
-    { name: channel, use: { ...devices['Desktop Chrome'], channel } },
+    // Chrome 与 Edge 同为 Chromium 内核，共用 Desktop Chrome 设备描述。
+    // --disable-web-security：关闭 CORS 检查——page.route 拦截不到 CORS 预检（网络进程直发），
+    // 页面级 mock 第三方域名（如 OSS 直传 PUT）时预检会真实外发失败，须禁用跨域检查
+    {
+      name: channel,
+      use: {
+        ...devices['Desktop Chrome'],
+        channel,
+        launchOptions: { args: ['--disable-web-security'] },
+      },
+    },
   ],
   webServer: backendAvailable
     ? [

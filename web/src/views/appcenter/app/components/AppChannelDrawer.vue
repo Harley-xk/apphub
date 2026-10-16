@@ -5,7 +5,7 @@
   描述: 更新通道抽屉：固定在某应用下的通道全量列表管理（新增 / 编辑 / 删除，stable 不可删）
 -->
 <template>
-  <el-drawer v-model="visible" :title="drawerTitle" size="680px">
+  <el-drawer v-model="visible" :title="drawerTitle" size="720px">
     <div class="drawer-body">
       <div class="drawer-toolbar">
         <el-button v-hasPermi="'appcenter:channel:create'" type="primary" @click="openCreate">
@@ -60,14 +60,14 @@ import type { ApphubTableColumn } from '@/components/ApphubTable/types'
 import { dateTimeFormatter } from '@/utils/format'
 import ChannelSaveDialog from '@/views/appcenter/app/components/ChannelSaveDialog.vue'
 
-/** 列定义（抽屉内非页面级表格，持久化 key 显式指定） */
+/** 列定义（抽屉内非页面级表格，持久化 key 显式指定；总宽收敛在抽屉内容宽内避免横向滚动拆分 fixed 列） */
 const columns: ApphubTableColumn[] = [
-  { field: 'code', title: '通道代码', minWidth: 120 },
-  { field: 'name', title: '显示名', minWidth: 120 },
-  { field: 'status', title: '状态', width: 90, slot: 'status' },
-  { field: 'sort', title: '排序', width: 70 },
-  { field: 'createTime', title: '创建时间', minWidth: 170, formatter: dateTimeFormatter },
-  { field: 'action', title: '操作', width: 130, fixed: 'right', slot: 'action' },
+  { field: 'code', title: '通道代码', width: 120 },
+  { field: 'name', title: '显示名', width: 110 },
+  { field: 'status', title: '状态', width: 80, slot: 'status' },
+  { field: 'sort', title: '排序', width: 60 },
+  { field: 'createTime', title: '创建时间', width: 160, formatter: dateTimeFormatter },
+  { field: 'action', title: '操作', width: 110, fixed: 'right', slot: 'action' },
 ]
 
 const visible = ref(false)

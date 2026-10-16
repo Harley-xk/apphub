@@ -5,7 +5,7 @@
   描述: 版本安装包抽屉：版本下包记录列表（上传 / 删除仅草稿版本开放），框架产物列提示发布校验配套
 -->
 <template>
-  <el-drawer v-model="visible" :title="drawerTitle" size="860px">
+  <el-drawer v-model="visible" :title="drawerTitle" size="900px">
     <div class="drawer-body">
       <el-alert
         v-if="version?.status !== 'draft'"
@@ -101,14 +101,14 @@ const STATUS_LABELS: Record<string, string> = {
   offline: '已下线',
 }
 
-/** 列定义（抽屉内非页面级表格，持久化 key 显式指定） */
+/** 列定义（抽屉内非页面级表格，持久化 key 显式指定；总宽收敛在抽屉内容宽内避免横向滚动拆分 fixed 列） */
 const columns: ApphubTableColumn[] = [
-  { field: 'platform', title: '平台 / 架构', width: 150, slot: 'platform' },
-  { field: 'fileName', title: '文件名', minWidth: 220, slot: 'fileName' },
-  { field: 'fileSize', title: '大小', width: 110, slot: 'fileSize' },
-  { field: 'artifacts', title: '框架产物', width: 230, slot: 'artifacts' },
-  { field: 'createTime', title: '登记时间', minWidth: 170, formatter: dateTimeFormatter },
-  { field: 'action', title: '操作', width: 90, fixed: 'right', slot: 'action' },
+  { field: 'platform', title: '平台 / 架构', width: 120, slot: 'platform' },
+  { field: 'fileName', title: '文件名', minWidth: 180, slot: 'fileName' },
+  { field: 'fileSize', title: '大小', width: 90, slot: 'fileSize' },
+  { field: 'artifacts', title: '框架产物', width: 210, slot: 'artifacts' },
+  { field: 'createTime', title: '登记时间', width: 160, formatter: dateTimeFormatter },
+  { field: 'action', title: '操作', width: 80, fixed: 'right', slot: 'action' },
 ]
 
 const visible = ref(false)

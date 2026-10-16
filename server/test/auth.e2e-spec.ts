@@ -214,12 +214,13 @@ describe('Auth (e2e)', () => {
           nickname: '系统管理员',
         })
         expect(body.data?.roles).toEqual(['super_admin'])
-        // super_admin 收敛：返回注册表全集（批次五扩至 30、批次六 demo 接入后 34、M1 appcenter 接入后 49 个权限串）
+        // super_admin 收敛：返回注册表全集（批次五扩至 30、批次六 demo 接入后 34、M1 appcenter 接入后 49、M2 member 接入后 55 个权限串）
         expect(body.data?.permissions).toContain(SYSTEM_PERMISSION_CODES.USER_QUERY)
         expect(body.data?.permissions).toContain(SYSTEM_PERMISSION_CODES.DICT_QUERY)
         expect(body.data?.permissions).toContain('demo:product:query')
         expect(body.data?.permissions).toContain('appcenter:app:query')
-        expect(body.data?.permissions?.length).toBe(49)
+        expect(body.data?.permissions).toContain('member:member:query')
+        expect(body.data?.permissions?.length).toBe(55)
       })
   })
 

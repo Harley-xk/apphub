@@ -149,4 +149,88 @@ test.describe('会员中心', () => {
     await expect(page.locator('.el-message').getByText('删除成功')).toBeVisible()
     await expect(page.locator('.vxe-body--row').filter({ hasText: `会员e2e应用${suffix}` })).toHaveCount(0)
   })
+
+  test('扫码登录（微信）自动注册 → 绑定支付宝 → 凭证类型标签展示（M4）', async ({ page, request }) => {
+    const suffix = Date.now() % 100000
+
+    // 前置：UI 注册应用并读取仅此一次的凭证（同闭环用例模式）
+    await page.goto('/appcenter/app')
+    await page.getByRole('button', { name: '注册应用' }).click()
+    const appDialog = page.locator('.el-dialog').filter({ hasText: '注册应用' })
+    await appDialog.getByPlaceholder('应用名称').fill(`扫码e2e应用${suffix}`)
+    await appDialog.getByText('桌面应用', { exact: true }).click()
+    await appDialog.getByText(/机密客户端/).click()
+    await appDialog.getByRole('button', { name: '确定' }).click()
+    const credentialDialog = page.locator('.el-dialog').filter({ hasText: '请立即保存' })
+    await expect(credentialDialog).toBeVisible()
+    const appKey = await credentialDialog.locator('code').nth(0).textContent()
+    const appSecret = await credentialDialog.locator('code').nth(1).textContent()
+    await credentialDialog.getByRole('button', { name: '我已妥善保存' }).click()
+
+    // 微信扫码登录：应用侧 OAuth 换取 unionid 后走统一 login（type=wechat，credential 占位不校验 C4），
+    // 查无凭证自动注册新会员（C5 登录即注册，携昵称）——验证码类凭证依赖短信 / 邮件通道，页面用例不可取码，
+    // 以扫码路径覆盖「登录即注册 + 新类型凭证展示」
+    const nickname = `扫码会员${suffix}`
+    const loginPath = '/api/open/member/auth/login'
+    const loginBody = JSON.stringify({
+      type: 'wechat',
+      identifier: `oE2eUnion${suffix}`,
+      credential: 'oauth',
+      nickname,
+    })
+    const loginRes = await request.post(`http://localhost:3000${loginPath}`, {
+      headers: appSignHeaders(appKey!, appSecret!, 'POST', loginPath, loginBody),
+      data: loginBody,
+    })
+    const loginJson = (await loginRes.json()) as { code: number, data?: { accessToken: string } }
+    expect(loginJson.code).toBe(0)
+
+    // 绑定支付宝凭证（扫码类型无验证码环节，携 access token 直接追加）
+    const bindPath = '/api/open/member/auth/bind'
+    const bindBody = JSON.stringify({
+      type: 'alipay',
+      identifier: `20880000${suffix}`,
+      credential: 'oauth',
+    })
+    const bindRes = await request.post(`http://localhost:3000${bindPath}`, {
+      headers: {
+        ...appSignHeaders(appKey!, appSecret!, 'POST', bindPath, bindBody),
+        Authorization: `Bearer ${loginJson.data!.accessToken}`,
+      },
+      data: bindBody,
+    })
+    expect(((await bindRes.json()) as { code: number }).code).toBe(0)
+
+    // 列表检索 → 详情抽屉：凭证清单两条，扫码标识脱敏（保留前 6 后 4），以片段定位行
+    await page.goto('/member/list')
+    await page.getByPlaceholder('昵称 / 手机 / 邮箱模糊匹配').fill(nickname)
+    await page.getByRole('button', { name: '查询' }).click()
+    const row = page.locator('.vxe-body--row').filter({ hasText: nickname }).first()
+    await expect(row).toBeVisible()
+    await row.getByRole('button', { name: '详情' }).click()
+    const drawer = page.locator('.el-drawer').filter({ hasText: '会员详情' })
+    await expect(drawer).toBeVisible()
+
+    // 类型标签映射（M4 五类型展示）：微信 / 支付宝，验证状态恒「已验证」
+    const wechatRow = drawer.locator('.vxe-body--row').filter({ hasText: 'oE2eUn' })
+    await expect(wechatRow).toBeVisible()
+    await expect(wechatRow.locator('.el-tag').first()).toHaveText('微信')
+    await expect(wechatRow.locator('.el-tag').nth(1)).toHaveText('已验证')
+    const alipayRow = drawer.locator('.vxe-body--row').filter({ hasText: '208800' })
+    await expect(alipayRow).toBeVisible()
+    await expect(alipayRow.locator('.el-tag').first()).toHaveText('支付宝')
+    await drawer.locator('.el-drawer__close-btn').click()
+
+    // 收尾：删除会员与应用，不污染种子
+    await row.getByRole('button', { name: '删除' }).click()
+    await page.locator('.el-message-box').getByRole('button', { name: '确定' }).click()
+    await expect(page.locator('.el-message').getByText('删除成功')).toBeVisible()
+
+    await page.goto('/appcenter/app')
+    const appRow = page.locator('.vxe-body--row').filter({ hasText: `扫码e2e应用${suffix}` }).first()
+    await appRow.getByRole('button', { name: '更多' }).click()
+    await page.getByRole('menuitem', { name: '删除应用' }).click()
+    await page.locator('.el-message-box').getByRole('button', { name: '确定' }).click()
+    await expect(page.locator('.el-message').getByText('删除成功')).toBeVisible()
+  })
 })

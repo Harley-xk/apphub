@@ -1,8 +1,11 @@
 import { describe, expect, it, jest } from '@jest/globals'
 import type { ExecutionContext } from '@nestjs/common'
+import type { ModuleRef } from '@nestjs/core'
 
 import { REQUEST_MEMBER_KEY } from './current-member.decorator'
 import { MemberAuthGuard } from './member-auth.guard'
+import { MemberAuthService } from './member-auth.service'
+import { MemberTokenService } from './member-token.service'
 import { MemberErrorCode } from '../error-codes'
 
 const MEMBER_ID = '00000000-0000-0000-0000-0000000000bb'
@@ -29,8 +32,13 @@ function makeGuard(options: { payload?: { sub: string, appKey: string } | 'throw
   const authService = {
     getActiveMemberById: jest.fn(() => Promise.resolve(options.member ?? null)),
   }
-  const guard = new MemberAuthGuard(tokenService as never, authService as never)
-  return { guard, tokenService, authService }
+  // ModuleRef 桩：按请求的 token 分发到对应服务桩（还原 guard 的 strict:false 懒解析）
+  const moduleRef: ModuleRef = {
+    get: (token: unknown) =>
+      token === MemberTokenService ? tokenService : token === MemberAuthService ? authService : undefined,
+  } as unknown as ModuleRef
+  const guard = new MemberAuthGuard(moduleRef)
+  return { guard, tokenService, authService, moduleRef }
 }
 
 const validPayload = { sub: MEMBER_ID, appKey: 'ah_app000000000001' }

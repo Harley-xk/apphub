@@ -4,7 +4,7 @@
  *
  * 描述: 终端用户模块：会员 / 凭证 / 双令牌 / 登录日志与锁定（M2 密码先行）、开放 API 与管理端接口
  */
-import { Logger, Module, OnModuleInit } from '@nestjs/common'
+import { forwardRef, Logger, Module, OnModuleInit } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { JwtService } from '@nestjs/jwt'
 import { TypeOrmModule } from '@nestjs/typeorm'
@@ -37,8 +37,9 @@ import { PermissionRegistry } from '../system/permissions'
 
 @Module({
   imports: [
-    // SubscriptionModule 提供 introspect 订阅段真值（subscription 不反向依赖 member 服务，无循环）
-    SubscriptionModule,
+    // SubscriptionModule 提供 introspect 订阅段真值；M5 起 subscription 开放下单端点需要
+    // MemberAuthGuard（下方 exports 导出）——两模块领域互依，双向 forwardRef 解环
+    forwardRef(() => SubscriptionModule),
     // AppEntity 供开放 API 链路解析应用（appKey → 应用 / 有效性），与 appcenter 共享仓储
     TypeOrmModule.forFeature([
       MemberEntity,
@@ -105,6 +106,8 @@ import { PermissionRegistry } from '../system/permissions'
         }),
     },
   ],
+  // MemberAuthGuard 供 subscription 开放下单 / 轮询端点用户态鉴权（M5，领域互依经 forwardRef 解环）
+  exports: [MemberAuthGuard],
 })
 export class MemberModule implements OnModuleInit {
   private readonly logger = new Logger(MemberModule.name)

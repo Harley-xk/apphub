@@ -67,6 +67,32 @@ export default () => ({
     password: process.env.MAIL_PASS ?? '',
     from: process.env.MAIL_FROM ?? '',
   },
+  pay: {
+    // 在线支付渠道（M5，见 docs/应用管理平台/在线支付渠道接入附录.md §7）：按渠道独立判定齐备态（P10）；
+    // 生产两渠道全未配或部分填写均启动 fail-fast，非生产未配渠道降级 Mock（PY16）
+    wechat: {
+      appId: process.env.WECHAT_PAY_APP_ID ?? '',
+      mchId: process.env.WECHAT_PAY_MCH_ID ?? '',
+      // 商户 API 证书序列号与私钥（签名用；证书公钥由私钥推导，无需单独配置）
+      certSerial: process.env.WECHAT_PAY_CERT_SERIAL ?? '',
+      privateKeyPath: process.env.WECHAT_PAY_PRIVATE_KEY_PATH ?? '',
+      // APIv3 密钥：回调解密与平台证书下载（无条件必配）
+      apiv3Key: process.env.WECHAT_PAY_APIV3_KEY ?? '',
+      // 公钥模式（2024 后新商户，P6）：两项配齐则回调验签用微信支付公钥（注入 SDK 证书表），
+      // 不配则平台证书模式（验签时 SDK 按需自动拉取平台证书）
+      publicKeySerial: process.env.WECHAT_PAY_PUBLIC_KEY_SERIAL ?? '',
+      publicKeyPath: process.env.WECHAT_PAY_PUBLIC_KEY_PATH ?? '',
+    },
+    alipay: {
+      appId: process.env.ALIPAY_APP_ID ?? '',
+      // 应用私钥（签名）与支付宝公钥（异步通知验签）
+      privateKeyPath: process.env.ALIPAY_PRIVATE_KEY_PATH ?? '',
+      publicKeyPath: process.env.ALIPAY_PUBLIC_KEY_PATH ?? '',
+      gateway: process.env.ALIPAY_GATEWAY ?? 'https://openapi.alipay.com/gateway.do',
+    },
+    // 回调公网地址（P7 可选）：配置则预下单显式传 notify_url；未配置不传，回落渠道控制台默认
+    publicBaseUrl: process.env.PAY_PUBLIC_BASE_URL ?? '',
+  },
   oss: {
     // 阿里云 OSS 对象存储（应用安装包分发，见 docs/应用管理平台/应用与版本管理设计.md §2.5）
     // 前四项齐备视为 OSS 已配置（未配置时服务正常启动，存储接口统一抛存储未配置错误）；

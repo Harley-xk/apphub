@@ -29,8 +29,16 @@ export const MemberErrorCode = {
   CREDENTIAL_OWNED_BY_OTHER: new ErrorCode(400200004, '凭证已归属其他会员，请先解绑'),
   /** 最后一条密码凭证不允许解绑 */
   LAST_PASSWORD_CREDENTIAL: new ErrorCode(400200005, '最后一条密码凭证不允许解绑'),
-  /** 验证码错误或过期（M4 激活） */
+  /** 验证码错误或过期（单次作废：失败一次即须重发，认证方式扩展设计 C6） */
   VERIFY_CODE_INVALID: new ErrorCode(400200006, '验证码错误或已过期'),
+  /** 凭证格式非法（标识 / 密文不符合类型规则，DTO 宽松化后由服务层分流校验，主张 C11） */
+  CREDENTIAL_FORMAT_INVALID: new ErrorCode(400200007, '凭证格式非法'),
+  /** 验证码发送过于频繁（60 秒重发间隔内） */
+  VERIFY_CODE_TOO_FREQUENT: new ErrorCode(400200008, '验证码发送过于频繁，请稍后再试'),
+  /** 验证码超出当日发送限额 */
+  VERIFY_CODE_DAILY_LIMIT: new ErrorCode(400200009, '验证码发送次数已达当日上限'),
+  /** 验证码通道发送失败（通道异常 / 通道未装配） */
+  VERIFY_CODE_SEND_FAILED: new ErrorCode(400200010, '验证码发送失败，请稍后重试'),
   // ===== 子域 003：认证与令牌 =====
   /** 登录失败（账号或密码错误，统一文案防枚举） */
   LOGIN_FAILED: new ErrorCode(400300001, '账号或密码错误'),

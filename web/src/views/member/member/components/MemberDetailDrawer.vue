@@ -80,7 +80,7 @@ import type { ApphubTableColumn } from '@/components/ApphubTable/types'
 import { dateTimeFormatter } from '@/utils/format'
 import ResetPasswordDialog from '@/views/member/member/components/ResetPasswordDialog.vue'
 
-/** 凭证类型展示映射（M2 仅 password 可自助注册，其余类型 M4 起开放绑定） */
+/** 凭证类型展示映射（M4 起五类型全开放：密码 / 手机 / 邮箱验证码与微信 / 支付宝扫码，认证方式扩展设计 §3.3） */
 const CREDENTIAL_TYPE_LABELS: Record<string, string> = {
   password: '密码',
   phone: '手机',

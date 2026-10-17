@@ -10,6 +10,7 @@ import { dataSourceStub } from './support/data-source-stub'
 import { signHeaders } from './support/signature.helper'
 import type { ApiResponse } from '../src/common/interfaces/api-response.interface'
 import { AppEntity } from '../src/modules/appcenter/entities/app.entity'
+import { MAIL_CODE_SENDER, SMS_CODE_SENDER } from '../src/modules/member/auth/code-sender/code-sender'
 import { MemberCredentialEntity } from '../src/modules/member/entities/member-credential.entity'
 import { MemberLoginLockEntity } from '../src/modules/member/entities/member-login-lock.entity'
 import { MemberLoginLogEntity } from '../src/modules/member/entities/member-login-log.entity'
@@ -128,6 +129,9 @@ describe('MemberModule 开放 API (e2e)', () => {
     { id: '00000000-0000-4000-8000-00000000sp01', appId: '00000000-0000-4000-8000-00000000m0a1', name: '专业版 · 年付', periodType: 'yearly', durationMonths: 12, price: 99000, originalPrice: null, status: 'on', sort: 0, remark: null },
   ]
   const subscriptionRows: Partial<SubscriptionEntity>[] = []
+  /** 验证码捕获桩：记录通道最近一次下发的码（e2e 不依赖 log 通道读日志） */
+  const smsCaptured: { code: string }[] = []
+  const mailCaptured: { identifier: string, code: string }[] = []
 
   /** 应用级签名请求：X-App-Key 头 + 按应用密钥签（GET 空 body 同样入签，主张 I1） */
   const appSigned = (
@@ -195,6 +199,21 @@ describe('MemberModule 开放 API (e2e)', () => {
       .useValue(subscriptionRepo)
       .overrideProvider(getRepositoryToken(MemberLoginLogEntity))
       .useValue({ insert: () => Promise.resolve() })
+      // M4 验证码通道捕获桩（替代 log 降级通道，e2e 直接取码驱动闭环）
+      .overrideProvider(SMS_CODE_SENDER)
+      .useValue({
+        send: (_identifier: string, code: string) => {
+          smsCaptured.push({ code })
+          return Promise.resolve()
+        },
+      })
+      .overrideProvider(MAIL_CODE_SENDER)
+      .useValue({
+        send: (identifier: string, code: string) => {
+          mailCaptured.push({ identifier, code })
+          return Promise.resolve()
+        },
+      })
       .compile()
 
     // rawBody: true 与 main.ts 保持一致，是签名校验的前提
@@ -259,8 +278,8 @@ describe('MemberModule 开放 API (e2e)', () => {
       expect((res.body as ApiResponse<unknown>).code).toBe(400200002)
     })
 
-    it('不支持的凭证类型应拒绝（400200001，M2 仅 password）', async () => {
-      const res = await appSigned('post', '/api/open/member/auth/register', { type: 'phone', identifier: '13812341234', credential: 'valid1234' }, APP_A_KEY, APP_A_SECRET).expect(400)
+    it('不在白名单的凭证类型应拒绝（400200001，M4 五类型之外）', async () => {
+      const res = await appSigned('post', '/api/open/member/auth/register', { type: 'sms', identifier: '13812341234', credential: 'valid1234' }, APP_A_KEY, APP_A_SECRET).expect(400)
       expect((res.body as ApiResponse<unknown>).code).toBe(400200001)
     })
 
@@ -391,6 +410,97 @@ describe('MemberModule 开放 API (e2e)', () => {
 
     it('会员分页列表应注册进路由（未认证 401 而非 404）', async () => {
       await request(server).get('/api/member').expect(401)
+    })
+  })
+
+  describe('验证码与扫码（M4）', () => {
+    const sendCode = (appKey: string, secret: string, type: string, identifier: string, scene = 'login') =>
+      appSigned('post', '/api/open/member/auth/code/send', { type, identifier, scene }, appKey, secret)
+
+    const codeLogin = (type: string, identifier: string, code: string, nickname?: string) =>
+      appSigned('post', '/api/open/member/auth/login', { type, identifier, credential: code, nickname }, APP_A_KEY, APP_A_SECRET)
+
+    it('邮箱验证码闭环：发码 → 登录即注册（携昵称）→ introspect 确认身份', async () => {
+      await sendCode(APP_A_KEY, APP_A_SECRET, 'email', 'm4-user@example.com').expect(200)
+      const sent = mailCaptured.at(-1)!
+      expect(sent.identifier).toBe('m4-user@example.com')
+      expect(sent.code).toMatch(/^\d{6}$/)
+
+      const res = await codeLogin('email', 'm4-user@example.com', sent.code, 'M4邮箱用户').expect(200)
+      const token = (res.body as ApiResponse<TokenPairBody>).data!.accessToken
+      const intro = await introspect(APP_A_KEY, APP_A_SECRET, token).expect(200)
+      expect((intro.body as ApiResponse<{ member: { nickname: string } }>).data!.member.nickname).toBe('M4邮箱用户')
+    })
+
+    it('60 秒重发间隔内再发应拒绝（400200008，identifier 全局维度）', async () => {
+      await sendCode(APP_A_KEY, APP_A_SECRET, 'phone', '13911112222').expect(200)
+      // 换应用签名重发同样被挡（频控不含 appKey，C10）
+      const res = await sendCode(APP_B_KEY, APP_B_SECRET, 'phone', '13911112222').expect(400)
+      expect((res.body as ApiResponse<unknown>).code).toBe(400200008)
+    })
+
+    it('验证码错一次即作废：正确码随后也不可用（单次作废，C6）', async () => {
+      await sendCode(APP_A_KEY, APP_A_SECRET, 'phone', '13733334444').expect(200)
+      const code = smsCaptured.at(-1)!.code
+      await codeLogin('phone', '13733334444', '000000').expect(400)
+      const reuse = await codeLogin('phone', '13733334444', code).expect(400)
+      expect((reuse.body as ApiResponse<unknown>).code).toBe(400200006)
+    })
+
+    it('手机验证码注册（register 接口）：发码 → 注册成功 → 标识重复拒绝（唯一性在验码之前）', async () => {
+      await sendCode(APP_A_KEY, APP_A_SECRET, 'phone', '13655556666', 'register').expect(200)
+      const code = smsCaptured.at(-1)!.code
+      await appSigned('post', '/api/open/member/auth/register', { type: 'phone', identifier: '13655556666', credential: code }, APP_A_KEY, APP_A_SECRET).expect(200)
+      // 重复注册（标识已归属）：唯一性在验码之前，不消耗验证码即拒绝
+      const dup = await appSigned('post', '/api/open/member/auth/register', { type: 'phone', identifier: '13655556666', credential: '123456' }, APP_A_KEY, APP_A_SECRET).expect(400)
+      expect((dup.body as ApiResponse<unknown>).code).toBe(400200002)
+    })
+
+    it('扫码登录查无凭证自动注册（credential 占位），二次登录同会员', async () => {
+      const first = await appSigned('post', '/api/open/member/auth/login', { type: 'wechat', identifier: 'm4-unionid-0001', credential: 'oauth', nickname: '微信用户甲' }, APP_A_KEY, APP_A_SECRET).expect(200)
+      const tokenA = (first.body as ApiResponse<TokenPairBody>).data!.accessToken
+      const introA = await introspect(APP_A_KEY, APP_A_SECRET, tokenA).expect(200)
+      const memberIdA = (introA.body as ApiResponse<{ member: { id: string } }>).data!.member.id
+
+      const second = await appSigned('post', '/api/open/member/auth/login', { type: 'wechat', identifier: 'm4-unionid-0001', credential: 'oauth' }, APP_B_KEY, APP_B_SECRET).expect(200)
+      const tokenB = (second.body as ApiResponse<TokenPairBody>).data!.accessToken
+      const introB = await introspect(APP_B_KEY, APP_B_SECRET, tokenB).expect(200)
+      // unionid 全局唯一：跨应用登录到同一会员（C3 同主体同人语义）
+      expect((introB.body as ApiResponse<{ member: { id: string } }>).data!.member.id).toBe(memberIdA)
+    })
+
+    it('验证码绑定：bind 场景发码 → 追加凭证 → 幂等重绑不消耗验证码', async () => {
+      // 先有一个密码会员
+      await register(APP_A_KEY, APP_A_SECRET, 'm4bind001')
+      const loginRes = await login(APP_A_KEY, APP_A_SECRET, 'm4bind001').expect(200)
+      const data = (loginRes.body as ApiResponse<TokenPairBody>).data!
+
+      await sendCode(APP_A_KEY, APP_A_SECRET, 'email', 'm4-bind@example.com', 'bind').expect(200)
+      const code = mailCaptured.at(-1)!.code
+      const bindRes = await appSigned('post', '/api/open/member/auth/bind', { type: 'email', identifier: 'm4-bind@example.com', credential: code }, APP_A_KEY, APP_A_SECRET, { Authorization: `Bearer ${data.accessToken}` }).expect(200)
+      expect((bindRes.body as ApiResponse<{ result: string }>).data!.result).toBe('added')
+
+      // 幂等重绑：existed（验证码已作废也不影响幂等分支）
+      const idem = await appSigned('post', '/api/open/member/auth/bind', { type: 'email', identifier: 'm4-bind@example.com', credential: '000000' }, APP_A_KEY, APP_A_SECRET, { Authorization: `Bearer ${data.accessToken}` }).expect(200)
+      expect((idem.body as ApiResponse<{ result: string }>).data!.result).toBe('existed')
+    })
+
+    it('bind 场景发码预检：标识已归属任何会员直接拒绝且不消耗通道（400200004，C12）', async () => {
+      const before = smsCaptured.length + mailCaptured.length
+      const res = await sendCode(APP_A_KEY, APP_A_SECRET, 'email', 'm4-user@example.com', 'bind').expect(400)
+      expect((res.body as ApiResponse<unknown>).code).toBe(400200004)
+      expect(smsCaptured.length + mailCaptured.length).toBe(before)
+    })
+
+    it('发码格式校验与场景枚举（400200007 / 框架 400）', async () => {
+      const badPhone = await sendCode(APP_A_KEY, APP_A_SECRET, 'phone', '123').expect(400)
+      expect((badPhone.body as ApiResponse<unknown>).code).toBe(400200007)
+      await sendCode(APP_A_KEY, APP_A_SECRET, 'email', 'm4-fmt@example.com', 'reset').expect(400)
+    })
+
+    it('密码强度不足返回分段业务码（400200007，C11 契约迁移）', async () => {
+      const res = await appSigned('post', '/api/open/member/auth/register', { type: 'password', identifier: 'm4weak001', credential: 'short' }, APP_A_KEY, APP_A_SECRET).expect(400)
+      expect((res.body as ApiResponse<unknown>).code).toBe(400200007)
     })
   })
 })

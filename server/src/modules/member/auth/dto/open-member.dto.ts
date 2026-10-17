@@ -2,32 +2,27 @@
  * 作者: Harley-xk
  * 创建: 2026-10-17
  *
- * 描述: 终端认证开放接口 DTO：注册 / 登录 / 刷新 / 登出 / 绑定入参与 introspect 出参（统一认证设计 §3.1/§3.2）。
- * 凭证类型合法性（M2 仅 password，0042001）由服务层校验以透出分段业务码
+ * 描述: 终端认证开放接口 DTO：注册 / 登录 / 刷新 / 登出 / 绑定 / 发码入参与 introspect 出参（统一认证设计 §3.1/§3.2、认证方式扩展设计 §3.3）。
+ * 凭证入参统一宽松校验（长度），类型相关的格式与强度校验由服务层分流抛分段业务码（主张 C11——DTO 装饰器无法按运行时 type 分支）
  */
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
-import { IsOptional, IsString, Length, Matches, MaxLength } from 'class-validator'
+import { IsIn, IsOptional, IsString, Length, MaxLength } from 'class-validator'
 
-import { PASSWORD_IDENTIFIER_PATTERN } from '../../member.constants'
-
-/** 密码强度：8-64 位且至少含字母与数字（首期不强制特殊字符，统一认证设计 §3.3） */
-const PASSWORD_PATTERN = /^(?=.*[A-Za-z])(?=.*\d).{8,64}$/
-
-/** 注册入参 */
+/** 注册入参（五类型：password=密码 / phone|email=验证码 / wechat|alipay=扫码标识，矩阵见认证方式扩展设计 §3.3） */
 export class RegisterMemberDto {
-  @ApiProperty({ description: '凭证类型（M2 首期仅 password，其余类型 0042001）' })
+  @ApiProperty({ description: '凭证类型（password / phone / email / wechat / alipay）' })
   @IsString()
   @MaxLength(16, { message: '凭证类型非法' })
   type!: string
 
-  @ApiProperty({ description: '登录标识（password 类型为自设账号：字母数字下划线 4-32 位）' })
+  @ApiProperty({ description: '登录标识：password=自设账号 / phone=手机号 / email=邮箱 / wechat=unionid / alipay=支付宝 user_id' })
   @IsString()
-  @Matches(PASSWORD_IDENTIFIER_PATTERN, { message: '登录标识须为字母数字下划线 4-32 位' })
+  @Length(1, 128, { message: '登录标识长度非法' })
   identifier!: string
 
-  @ApiProperty({ description: '凭证密文（密码：8-64 位且至少含字母与数字）' })
+  @ApiProperty({ description: '凭证密文：password=密码 / phone|email=6 位验证码 / wechat|alipay=占位 oauth' })
   @IsString()
-  @Matches(PASSWORD_PATTERN, { message: '密码须为 8-64 位且至少包含字母与数字' })
+  @Length(1, 128, { message: '凭证长度非法' })
   credential!: string
 
   @ApiPropertyOptional({ description: '昵称（未填时自动生成兜底）' })
@@ -37,8 +32,8 @@ export class RegisterMemberDto {
   nickname?: string
 }
 
-/** 登录入参（M2 为 password 类型；phone/email/扫码形态按 M4 接入，结构不变）。
- * 标识与凭证只做宽松长度校验：不存在 / 不匹配统一走 0043001 文案，不向探测者反馈格式正确性 */
+/** 登录入参（五类型矩阵同注册；查无凭证时验证码 / 扫码类型自动注册——登录即注册，主张 C5）。
+ * 标识与凭证只做宽松长度校验：password 不存在 / 不匹配统一走 0043001 文案，不向探测者反馈格式正确性 */
 export class LoginMemberDto {
   @ApiProperty({ description: '凭证类型' })
   @IsString()
@@ -50,10 +45,16 @@ export class LoginMemberDto {
   @Length(1, 128, { message: '登录标识长度非法' })
   identifier!: string
 
-  @ApiProperty({ description: '凭证密文' })
+  @ApiProperty({ description: '凭证密文（password=密码 / phone|email=验证码 / wechat|alipay=占位 oauth）' })
   @IsString()
   @Length(1, 128, { message: '凭证长度非法' })
   credential!: string
+
+  @ApiPropertyOptional({ description: '昵称：仅自动注册新会员时生效（扫码 / 验证码登录带出第三方昵称），已存在会员忽略' })
+  @IsOptional()
+  @IsString()
+  @Length(1, 64, { message: '昵称长度须在 1-64 位之间' })
+  nickname?: string
 }
 
 /** 刷新入参 */
@@ -72,22 +73,39 @@ export class LogoutMemberDto {
   refreshToken!: string
 }
 
-/** 绑定新凭证入参（绑定合并，统一认证设计 §3.2） */
+/** 绑定新凭证入参（绑定合并，统一认证设计 §3.2；五类型同登录矩阵，验证类凭证为 6 位验证码） */
 export class BindCredentialDto {
-  @ApiProperty({ description: '凭证类型（M2 首期仅 password）' })
+  @ApiProperty({ description: '凭证类型（password / phone / email / wechat / alipay）' })
   @IsString()
   @MaxLength(16, { message: '凭证类型非法' })
   type!: string
 
   @ApiProperty({ description: '登录标识' })
   @IsString()
-  @Matches(PASSWORD_IDENTIFIER_PATTERN, { message: '登录标识须为字母数字下划线 4-32 位' })
+  @Length(1, 128, { message: '登录标识长度非法' })
   identifier!: string
 
-  @ApiProperty({ description: '凭证密文（密码）' })
+  @ApiProperty({ description: '凭证密文（password=密码 / phone|email=验证码 / wechat|alipay=占位 oauth）' })
   @IsString()
-  @Matches(PASSWORD_PATTERN, { message: '密码须为 8-64 位且至少包含字母与数字' })
+  @Length(1, 128, { message: '凭证长度非法' })
   credential!: string
+}
+
+/** 发送验证码入参（认证方式扩展设计 §3.3）：scene 为平台内部枚举，bind 场景触发归属预检（C12） */
+export class SendCodeDto {
+  @ApiProperty({ description: '验证码类型（phone / email）' })
+  @IsString()
+  @MaxLength(16, { message: '凭证类型非法' })
+  type!: string
+
+  @ApiProperty({ description: '接收标识（手机号 / 邮箱）' })
+  @IsString()
+  @Length(1, 128, { message: '登录标识长度非法' })
+  identifier!: string
+
+  @ApiProperty({ description: '场景（login / register / bind）' })
+  @IsIn(['login', 'register', 'bind'], { message: '验证码场景非法' })
+  scene!: 'login' | 'register' | 'bind'
 }
 
 /** introspect 出参：认证与订阅校验合一（D7/P4） */

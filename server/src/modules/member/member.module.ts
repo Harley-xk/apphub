@@ -11,6 +11,12 @@ import { TypeOrmModule } from '@nestjs/typeorm'
 
 import { MemberAdminService } from './admin/member-admin.service'
 import { MemberController } from './admin/member.controller'
+import { CaptchaService } from './auth/captcha.service'
+import { isSmsConfigured, SmsChannelConfig, AliyunSmsSender } from './auth/code-sender/aliyun-sms.sender'
+import type { CodeSender } from './auth/code-sender/code-sender'
+import { MAIL_CODE_SENDER, SMS_CODE_SENDER } from './auth/code-sender/code-sender'
+import { LogCodeSender } from './auth/code-sender/log-code.sender'
+import { isMailConfigured, MailChannelConfig, SmtpMailSender } from './auth/code-sender/smtp-mail.sender'
 import { LoginLockService } from './auth/login-lock.service'
 import { MemberAuthGuard } from './auth/member-auth.guard'
 import { MemberAuthService } from './auth/member-auth.service'
@@ -51,6 +57,40 @@ import { PermissionRegistry } from '../system/permissions'
     MemberLoginLogService,
     MemberAuthGuard,
     MemberTokenService,
+    CaptchaService,
+    {
+      // 短信通道按配置装配（认证方式扩展设计 §3.2）：真实通道 / log 降级（非生产缺配时）
+      provide: SMS_CODE_SENDER,
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService): CodeSender => {
+        const smsConfig: SmsChannelConfig = {
+          accessKeyId: configService.get<string>('sms.accessKeyId') ?? '',
+          accessKeySecret: configService.get<string>('sms.accessKeySecret') ?? '',
+          signName: configService.get<string>('sms.signName') ?? '',
+          templateCode: configService.get<string>('sms.templateCode') ?? '',
+        }
+        return isSmsConfigured(smsConfig)
+          ? new AliyunSmsSender(smsConfig)
+          : new LogCodeSender(new Logger('SmsCodeSender'), 'sms')
+      },
+    },
+    {
+      // 邮件通道同短信：SMTP 五项齐备走真实通道，否则非生产降级 log
+      provide: MAIL_CODE_SENDER,
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService): CodeSender => {
+        const mailConfig: MailChannelConfig = {
+          host: configService.get<string>('mail.host') ?? '',
+          port: configService.get<number>('mail.port') ?? 465,
+          user: configService.get<string>('mail.user') ?? '',
+          password: configService.get<string>('mail.password') ?? '',
+          from: configService.get<string>('mail.from') ?? '',
+        }
+        return isMailConfigured(mailConfig)
+          ? new SmtpMailSender(mailConfig)
+          : new LogCodeSender(new Logger('MailCodeSender'), 'mail')
+      },
+    },
     {
       // member 域独立 JwtService 实例（独立密钥与时效，D18 两套信任域互不可串）；
       // 显式注入 token 而非再注册 JwtModule——避免与 system 域 global JwtService 的遮蔽歧义
@@ -74,13 +114,38 @@ export class MemberModule implements OnModuleInit {
     private readonly permissionRegistry: PermissionRegistry,
   ) {}
 
-  /** 启动期接入权限注册表 + 生产密钥 fail-fast（首段不符 / 串冲突 / 密钥缺配即拒绝启动） */
+  /** 启动期接入权限注册表 + 生产密钥与验证码通道 fail-fast（首段不符 / 串冲突 / 密钥或通道缺配即拒绝启动） */
   onModuleInit(): void {
     this.permissionRegistry.registerModule({ module: MEMBER_MODULE_NAME, points: MEMBER_PERMISSIONS })
+    if (this.configService.get<string>('env') !== 'production') {
+      return
+    }
     const secret = this.configService.get<string>('member.jwtSecret') ?? ''
-    if (this.configService.get<string>('env') === 'production' && secret === DEFAULT_MEMBER_JWT_SECRET) {
+    if (secret === DEFAULT_MEMBER_JWT_SECRET) {
       this.logger.error('生产环境必须配置独立的 MEMBER_JWT_SECRET（不得使用开发默认密钥）')
       throw new Error('MEMBER_JWT_SECRET 未配置为生产独立密钥，服务拒绝启动')
+    }
+    // 验证码通道生产 fail-fast（C7）：配置缺失即拒绝启动，不允许生产环境静默走 log 降级
+    const smsConfig: SmsChannelConfig = {
+      accessKeyId: this.configService.get<string>('sms.accessKeyId') ?? '',
+      accessKeySecret: this.configService.get<string>('sms.accessKeySecret') ?? '',
+      signName: this.configService.get<string>('sms.signName') ?? '',
+      templateCode: this.configService.get<string>('sms.templateCode') ?? '',
+    }
+    if (!isSmsConfigured(smsConfig)) {
+      this.logger.error('生产环境必须配置阿里云短信通道（SMS_ACCESS_KEY_ID / SMS_ACCESS_KEY_SECRET / SMS_SIGN_NAME / SMS_TEMPLATE_CODE）')
+      throw new Error('短信通道配置缺失，服务拒绝启动')
+    }
+    const mailConfig: MailChannelConfig = {
+      host: this.configService.get<string>('mail.host') ?? '',
+      port: this.configService.get<number>('mail.port') ?? 465,
+      user: this.configService.get<string>('mail.user') ?? '',
+      password: this.configService.get<string>('mail.password') ?? '',
+      from: this.configService.get<string>('mail.from') ?? '',
+    }
+    if (!isMailConfigured(mailConfig)) {
+      this.logger.error('生产环境必须配置 SMTP 邮件通道（MAIL_HOST / MAIL_PORT / MAIL_USER / MAIL_PASS / MAIL_FROM）')
+      throw new Error('邮件通道配置缺失，服务拒绝启动')
     }
   }
 }

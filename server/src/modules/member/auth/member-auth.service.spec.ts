@@ -38,6 +38,10 @@ function makeService(options: {
   member?: Partial<MemberEntity> | null
   app?: Partial<AppEntity> | null
   revokeSuccess?: boolean
+  /** 验证码域校验结果（phone/email 凭证比对桩，默认 false） */
+  captchaVerify?: boolean
+  /** 验证码域发送桩（sendCode 用例默认成功） */
+  captchaSendError?: Error | null
 }) {
   const saved: { members: unknown[], credentials: unknown[] } = { members: [], credentials: [] }
   const manager = {
@@ -79,6 +83,11 @@ function makeService(options: {
     getIntrospectSegment: jest.fn(() =>
       Promise.resolve({ subscribed: false, planName: null, periodType: null, expireAt: null })),
   }
+  // 验证码域桩（M4：verify 单次作废语义由 captcha.service.spec 独立守护，此处只桩结果）
+  const captchaService = {
+    verify: jest.fn(() => options.captchaVerify ?? false),
+    send: jest.fn(() => (options.captchaSendError ? Promise.reject(options.captchaSendError) : Promise.resolve())),
+  }
   const service = new MemberAuthService(
     dataSource as never,
     memberRepository as never,
@@ -88,8 +97,9 @@ function makeService(options: {
     loginLockService as never,
     loginLogService as never,
     subscriptionService as never,
+    captchaService as never,
   )
-  return { service, dataSource, memberRepository, credentialRepository, appRepository, tokenService, loginLockService, loginLogService, subscriptionService, saved }
+  return { service, dataSource, memberRepository, credentialRepository, appRepository, tokenService, loginLockService, loginLogService, subscriptionService, captchaService, saved }
 }
 
 const registerDto = { type: CREDENTIAL_TYPE.PASSWORD, identifier: 'newuser1', credential: 'pass1234' }
@@ -128,10 +138,10 @@ describe('MemberAuthService 注册', () => {
     })
   })
 
-  it('不支持的凭证类型应抛 CREDENTIAL_TYPE_UNSUPPORTED（M2 仅 password）', async () => {
+  it('不在白名单的凭证类型应抛 CREDENTIAL_TYPE_UNSUPPORTED（M4 五类型之外）', async () => {
     const { service } = makeService({ app })
     await expect(
-      service.register({ ...registerDto, type: CREDENTIAL_TYPE.PHONE }, APP_KEY, client),
+      service.register({ ...registerDto, type: 'sms' }, APP_KEY, client),
     ).rejects.toMatchObject({ code: MemberErrorCode.CREDENTIAL_TYPE_UNSUPPORTED.code })
   })
 
@@ -296,5 +306,139 @@ describe('MemberAuthService 绑定与校验', () => {
   it('getActiveMemberById 对禁用会员应返回 null（逐请求查库的即时失效语义）', async () => {
     const { service } = makeService({ app, member: { ...member, status: MEMBER_STATUS.DISABLED } })
     await expect(service.getActiveMemberById(MEMBER_ID)).resolves.toBeNull()
+  })
+})
+
+describe('MemberAuthService 验证码与扫码（M4）', () => {
+  const phoneRegisterDto = { type: CREDENTIAL_TYPE.PHONE, identifier: '13800138000', credential: '123456' }
+
+  it('验证码注册成功应落会员与凭证且不持密文（验证行为即信任，verified 恒 true）', async () => {
+    const { service, saved } = makeService({ app, captchaVerify: true })
+    await expect(service.register(phoneRegisterDto, APP_KEY, client)).resolves.toEqual(tokenPair)
+    expect(saved.credentials[0]).toMatchObject({
+      credentialType: CREDENTIAL_TYPE.PHONE,
+      identifier: '13800138000',
+      credentialSecret: null,
+      verified: true,
+    })
+  })
+
+  it('注册唯一性冲突应在验码之前（冲突不消耗验证码）', async () => {
+    const { service, captchaService } = makeService({ app, credential, captchaVerify: true })
+    await expect(service.register(phoneRegisterDto, APP_KEY, client)).rejects.toMatchObject({
+      code: MemberErrorCode.CREDENTIAL_IDENTIFIER_DUPLICATE.code,
+    })
+    expect(captchaService.verify).not.toHaveBeenCalled()
+  })
+
+  it('注册验证码错误应抛 VERIFY_CODE_INVALID 并计锁定失败（C6）', async () => {
+    const { service, loginLockService } = makeService({ app, captchaVerify: false })
+    await expect(service.register(phoneRegisterDto, APP_KEY, client)).rejects.toMatchObject({
+      code: MemberErrorCode.VERIFY_CODE_INVALID.code,
+    })
+    expect(loginLockService.recordFailure).toHaveBeenCalledWith(APP_KEY, CREDENTIAL_TYPE.PHONE, '13800138000')
+  })
+
+  it('验证码登录查无凭证应自动注册并返回令牌对（登录即注册，C5）', async () => {
+    const { service, saved, tokenService } = makeService({ app, credential: null, member: null, captchaVerify: true })
+    await expect(
+      service.login({ ...phoneRegisterDto, nickname: '手机注册' }, APP_KEY, client),
+    ).resolves.toEqual(tokenPair)
+    expect(saved.members).toHaveLength(1)
+    expect(saved.members[0]).toMatchObject({ nickname: '手机注册', registeredAppId: APP_ID })
+    expect(tokenService.issueTokenPair).toHaveBeenCalledWith(expect.any(String), APP_ID, APP_KEY, client.ip)
+  })
+
+  it('验证码登录错误应抛 VERIFY_CODE_INVALID 并计锁定失败（C6 双保险）', async () => {
+    const { service, loginLockService } = makeService({ app, credential: null, member: null, captchaVerify: false })
+    await expect(service.login(phoneRegisterDto, APP_KEY, client)).rejects.toMatchObject({
+      code: MemberErrorCode.VERIFY_CODE_INVALID.code,
+    })
+    expect(loginLockService.recordFailure).toHaveBeenCalled()
+  })
+
+  it('扫码登录查无凭证应自动注册（credential 占位不校验，可携昵称）', async () => {
+    const { service, saved } = makeService({ app, credential: null, member: null })
+    await expect(
+      service.login({ type: CREDENTIAL_TYPE.WECHAT, identifier: 'unionX123', credential: 'oauth' }, APP_KEY, client),
+    ).resolves.toEqual(tokenPair)
+    expect(saved.credentials[0]).toMatchObject({
+      credentialType: CREDENTIAL_TYPE.WECHAT,
+      identifier: 'unionX123',
+      credentialSecret: null,
+    })
+  })
+
+  it('扫码登录已有凭证应正常登录（不经验证码域）', async () => {
+    const wechatCredential = { ...credential, credentialType: CREDENTIAL_TYPE.WECHAT, identifier: 'unionX123', credentialSecret: null }
+    const { service, captchaService } = makeService({ app, credential: wechatCredential, member })
+    await expect(
+      service.login({ type: CREDENTIAL_TYPE.WECHAT, identifier: 'unionX123', credential: 'oauth' }, APP_KEY, client),
+    ).resolves.toEqual(tokenPair)
+    expect(captchaService.verify).not.toHaveBeenCalled()
+  })
+
+  it('凭证类型分流格式校验：标识与密文规则错误应抛 CREDENTIAL_FORMAT_INVALID（C11）', async () => {
+    const { service } = makeService({ app, captchaVerify: true })
+    // 手机号格式错误
+    await expect(
+      service.login({ type: CREDENTIAL_TYPE.PHONE, identifier: '123', credential: '123456' }, APP_KEY, client),
+    ).rejects.toMatchObject({ code: MemberErrorCode.CREDENTIAL_FORMAT_INVALID.code })
+    // 验证码位数错误
+    await expect(
+      service.login({ type: CREDENTIAL_TYPE.EMAIL, identifier: 'a@b.com', credential: 'abc' }, APP_KEY, client),
+    ).rejects.toMatchObject({ code: MemberErrorCode.CREDENTIAL_FORMAT_INVALID.code })
+    // 密码强度（原框架 400 迁移为分段业务码）
+    await expect(
+      service.register({ type: CREDENTIAL_TYPE.PASSWORD, identifier: 'newuser1', credential: 'short' }, APP_KEY, client),
+    ).rejects.toMatchObject({ code: MemberErrorCode.CREDENTIAL_FORMAT_INVALID.code })
+  })
+
+  it('验证码绑定新凭证成功且不持密文', async () => {
+    const { service, credentialRepository } = makeService({ app, member, credential: null, captchaVerify: true })
+    await expect(
+      service.bind(MEMBER_ID, { type: CREDENTIAL_TYPE.EMAIL, identifier: 'a@b.com', credential: '123456' }),
+    ).resolves.toEqual({ result: 'added' })
+    expect(credentialRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+      credentialType: CREDENTIAL_TYPE.EMAIL,
+      credentialSecret: null,
+    }))
+  })
+
+  it('绑定幂等分支不应消耗验证码', async () => {
+    const { service, captchaService } = makeService({ app, member, credential: { ...credential, credentialType: CREDENTIAL_TYPE.PHONE, identifier: '13800138000' }, captchaVerify: true })
+    await expect(
+      service.bind(MEMBER_ID, { type: CREDENTIAL_TYPE.PHONE, identifier: '13800138000', credential: '123456' }),
+    ).resolves.toEqual({ result: 'existed' })
+    expect(captchaService.verify).not.toHaveBeenCalled()
+  })
+
+  it('发码：非验证码类型应抛类型不支持', async () => {
+    const { service } = makeService({ app })
+    await expect(
+      service.sendCode({ type: CREDENTIAL_TYPE.PASSWORD, identifier: 'tester01', scene: 'login' }, APP_KEY, client),
+    ).rejects.toMatchObject({ code: MemberErrorCode.CREDENTIAL_TYPE_UNSUPPORTED.code })
+  })
+
+  it('发码：bind 场景标识已归属应拒绝且不消耗通道（C12 预检）', async () => {
+    const { service, captchaService } = makeService({ app, credential })
+    await expect(
+      service.sendCode({ type: CREDENTIAL_TYPE.PHONE, identifier: '13800138000', scene: 'bind' }, APP_KEY, client),
+    ).rejects.toMatchObject({ code: MemberErrorCode.CREDENTIAL_OWNED_BY_OTHER.code })
+    expect(captchaService.send).not.toHaveBeenCalled()
+  })
+
+  it('发码：通过频控与预检后应交验证码域发送并留痕 log_type=30', async () => {
+    const { service, captchaService, loginLogService } = makeService({ app, credential: null })
+    await expect(
+      service.sendCode({ type: CREDENTIAL_TYPE.PHONE, identifier: '13800138000', scene: 'login' }, APP_KEY, client),
+    ).resolves.toBeUndefined()
+    expect(captchaService.send).toHaveBeenCalledWith(CREDENTIAL_TYPE.PHONE, '13800138000')
+    expect(loginLogService.record.mock.calls[0][0]).toMatchObject({
+      credentialType: CREDENTIAL_TYPE.PHONE,
+      identifier: '13800138000',
+      logType: 30,
+      resultCode: 0,
+    })
   })
 })

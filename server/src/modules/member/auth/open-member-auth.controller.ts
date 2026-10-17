@@ -17,6 +17,7 @@ import {
   LoginMemberDto,
   RefreshTokenDto,
   RegisterMemberDto,
+  SendCodeDto,
 } from './dto/open-member.dto'
 import { MemberAuthGuard } from './member-auth.guard'
 import { MemberAuthService } from './member-auth.service'
@@ -42,16 +43,22 @@ function readAppKey(request: Request): string {
 export class OpenMemberAuthController {
   constructor(private readonly authService: MemberAuthService) {}
 
-  @ApiOperation({ summary: '注册（注册即登录，返回令牌对）' })
+  @ApiOperation({ summary: '注册（注册即登录，返回令牌对；五类型凭证，验证码类型须先发码）' })
   @Post('register')
   async register(@Body() dto: RegisterMemberDto, @Req() request: Request): Promise<TokenPairVo> {
     return this.authService.register(dto, readAppKey(request), getClientInfo(request))
   }
 
-  @ApiOperation({ summary: '登录（密码 / 验证码 / 扫码按类型，M2 首期密码）' })
+  @ApiOperation({ summary: '登录（密码 / 验证码 / 扫码按类型；验证码与扫码查无凭证自动注册）' })
   @Post('login')
   async login(@Body() dto: LoginMemberDto, @Req() request: Request): Promise<TokenPairVo> {
     return this.authService.login(dto, readAppKey(request), getClientInfo(request))
+  }
+
+  @ApiOperation({ summary: '发送验证码（手机 / 邮箱；60s 重发间隔、单 identifier 日限 10 条）' })
+  @Post('code/send')
+  async sendCode(@Body() dto: SendCodeDto, @Req() request: Request): Promise<void> {
+    await this.authService.sendCode(dto, readAppKey(request), getClientInfo(request))
   }
 
   @ApiOperation({ summary: '刷新令牌（轮换：旧 refresh 吊销 + 新令牌对）' })

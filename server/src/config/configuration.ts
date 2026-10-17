@@ -51,6 +51,22 @@ export default () => ({
     // 窗口长度（毫秒），默认 1 分钟
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS ?? String(60 * 1000), 10),
   },
+  sms: {
+    // 阿里云短信（M4 验证码通道，认证方式扩展设计 §3.2）：四项齐备视为已配置；
+    // 生产缺配启动 fail-fast，非生产降级 log 通道；AK 建议独立 RAM 子账号（仅授短信发送权限）
+    accessKeyId: process.env.SMS_ACCESS_KEY_ID ?? '',
+    accessKeySecret: process.env.SMS_ACCESS_KEY_SECRET ?? '',
+    signName: process.env.SMS_SIGN_NAME ?? '',
+    templateCode: process.env.SMS_TEMPLATE_CODE ?? '',
+  },
+  mail: {
+    // SMTP 邮件通道（M4 验证码，认证方式扩展设计 §3.2）：五项齐备视为已配置，装配与 fail-fast 规则同短信
+    host: process.env.MAIL_HOST ?? '',
+    port: parseInt(process.env.MAIL_PORT ?? '465', 10),
+    user: process.env.MAIL_USER ?? '',
+    password: process.env.MAIL_PASS ?? '',
+    from: process.env.MAIL_FROM ?? '',
+  },
   oss: {
     // 阿里云 OSS 对象存储（应用安装包分发，见 docs/应用管理平台/应用与版本管理设计.md §2.5）
     // 前四项齐备视为 OSS 已配置（未配置时服务正常启动，存储接口统一抛存储未配置错误）；

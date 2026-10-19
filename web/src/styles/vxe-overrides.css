@@ -12,7 +12,12 @@
   /* 主色与文字 */
   --vxe-ui-primary-color: var(--n1-color-primary);
   --vxe-ui-primary-darken-color: var(--n1-color-primary-hover);
-  --vxe-ui-font-primary-color: var(--n1-text-1);
+  /* 正文文字色必须显式映射：vxe 暗色走 [data-vxe-ui-theme=dark] 属性、
+     html.dark 下不激活，漏映射即恒为默认 rgba(0,0,0,.7)（暗色下黑字） */
+  --vxe-ui-font-color: var(--n1-text-1);
+  /* font-primary 是 vxe 的「主色文字」（排序激活 / 勾选与单选选中 / 编辑聚焦边框），
+     语义同主色而非正文 */
+  --vxe-ui-font-primary-color: var(--n1-color-primary);
   --vxe-ui-font-secondary-color: var(--n1-text-2);
   --vxe-ui-font-disabled-color: var(--n1-text-3);
 

@@ -1,0 +1,14 @@
+# 构建上下文瘦身与本地配置防泄入镜像（.git、依赖、产物、本地环境文件）
+.git
+.vscode
+.idea
+**/node_modules
+**/dist
+**/coverage
+**/test-results
+**/playwright-report
+logs
+**/*.log
+server/.env
+web/.env
+web/.env.*.local

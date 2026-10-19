@@ -1,9 +1,14 @@
 /*
  * Element Plus 主题覆写：--el-* 变量对齐 --n1-* 设计 token（明暗双套，不引入 sass）
  * 主色刻度为硬编码计算值（浅色混白 / 深色混黑），不使用 color-mix——保持无 sass 依赖的纯 CSS 变量方案
+ *
+ * 选择器必须 :root 与 html.dark 并列：EP 的 dark/css-vars.css 会在 html.dark（特异性 0,1,1）
+ * 下重定义全套 --el-*（含 --el-color-primary 压回 #409eff），仅 :root（0,1,0）覆写会被压制，
+ * 暗色下按钮 / 分页等回退默认蓝；并列后同特异性、引入在后即胜出，值为 --n1-* 活引用，明暗自动翻转
  */
 
-:root {
+:root,
+html.dark {
   /* 主色与刻度（基色 #0D9488） */
   --el-color-primary: var(--n1-color-primary);
   --el-color-primary-light-3: #56b4ac;
@@ -49,16 +54,14 @@
  */
 
 html.dark {
-  /* 主色提亮为 #14B8A6 后的刻度（深色下向黑混合，对齐 EP dark 约定） */
+  /* 主色提亮为 #14B8A6 后的刻度（深色下向黑混合，对齐 EP dark 约定）；
+     基色 --el-color-primary 无需在此重定义——引用 --n1-color-primary 活值自动翻转 */
   --el-color-primary-light-3: #0e8174;
   --el-color-primary-light-5: #0a5c53;
   --el-color-primary-light-7: #063732;
   --el-color-primary-light-8: #042521;
   --el-color-primary-light-9: #021211;
   --el-color-primary-dark-2: #43c6b8;
-
-  /* 深色下主按钮悬停改提亮，覆盖上面的通用映射 */
-  --el-button-hover-bg-color: var(--n1-color-primary-hover);
 }
 
 /* 菜单激活项：主色浅底圆角块 */

@@ -11,6 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 @rules/base.md
 @rules/code-style.md
 @rules/testing.md
+@rules/branding.md
 
 ## 项目现状
 

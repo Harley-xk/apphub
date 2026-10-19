@@ -44,24 +44,41 @@
   padding-bottom: 10px;
 }
 
-/* ============ 列拖拽把手：hover 表头浮现于列末尾 ============ */
+/* ============ 列拖拽把手：hover 表头浮现于标题左隙 ============ */
 
 /* vxe 把手 DOM 位于标题 span 之前（block 布局无法用 order 调序），
-   改绝对定位到单元格右缘：默认隐藏、hover 该列表头时浮现 */
+   改绝对定位置于标题左侧的 padding 空隙正中（16px 留白内，不挤压标题文字）：
+   默认隐藏、hover 该列表头时浮现 */
 .vxe-table .vxe-header--column > .vxe-cell {
   position: relative;
 }
 
 .vxe-table .vxe-header--column .vxe-cell--drag-handle {
   position: absolute;
-  right: 6px;
+  left: 8px;
   top: 50%;
-  transform: translateY(-50%);
+  transform: translate(-50%, -50%);
+  padding: 4px;
   opacity: 0;
   color: var(--apphub-text-3);
   transition:
     opacity 0.15s ease,
     color 0.15s ease;
+}
+
+/* 把手图标改竖向点阵（三行两列）：重绘 vxe 字体图标（默认两行三列）为
+   radial-gradient 平铺六点（2px 点 / 5px 步进，元素本体即点阵完整尺寸 7x12，
+   保证 translate 垂直居中精确），点色随 currentColor 自动继承明暗着色 */
+.vxe-table .vxe-header--column .vxe-cell--drag-handle i {
+  display: block;
+  width: 7px;
+  height: 12px;
+  background-image: radial-gradient(circle at 1px 1px, currentColor 1px, transparent 1.1px);
+  background-size: 5px 5px;
+}
+
+.vxe-table .vxe-header--column .vxe-cell--drag-handle i::before {
+  content: none;
 }
 
 /* 暗色下提亮一档保证可见 */

@@ -18,6 +18,10 @@ export default () => ({
   env: process.env.NODE_ENV ?? 'development',
   port: parseInt(process.env.PORT ?? '3000', 10),
   swaggerEnabled: process.env.SWAGGER_ENABLED !== 'false',
+  // 通道降级开关（上线批次 DEP-5）：生产环境允许未配置的短信 / 邮件 / 支付通道降级运行
+  // （短信邮件→log 通道，支付→渠道不注册下单 005200005），供资质报备未齐的上线窗口期显式豁免；
+  // 默认 false 维持 fail-fast。仅豁免「全未配置」，部分填写仍属配置错误照常 fail-fast；Mock 永不进生产
+  channelFallback: process.env.ALLOW_CHANNEL_FALLBACK === 'true',
   jwt: {
     // 签名密钥：默认开发值仅供本地；生产必须配置独立 JWT_SECRET（SystemModule 启动校验）
     secret: process.env.JWT_SECRET ?? DEFAULT_JWT_SECRET,

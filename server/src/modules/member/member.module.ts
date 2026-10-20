@@ -128,7 +128,9 @@ export class MemberModule implements OnModuleInit {
       this.logger.error('生产环境必须配置独立的 MEMBER_JWT_SECRET（不得使用开发默认密钥）')
       throw new Error('MEMBER_JWT_SECRET 未配置为生产独立密钥，服务拒绝启动')
     }
-    // 验证码通道生产 fail-fast（C7）：配置缺失即拒绝启动，不允许生产环境静默走 log 降级
+    // 验证码通道生产 fail-fast（C7）：配置缺失即拒绝启动，不允许生产环境静默走 log 降级；
+    // ALLOW_CHANNEL_FALLBACK 显式豁免（上线批次 DEP-5）：资质报备未齐的窗口期降级 log 运行
+    const allowFallback = this.configService.get<boolean>('channelFallback') === true
     const smsConfig: SmsChannelConfig = {
       accessKeyId: this.configService.get<string>('sms.accessKeyId') ?? '',
       accessKeySecret: this.configService.get<string>('sms.accessKeySecret') ?? '',
@@ -136,8 +138,13 @@ export class MemberModule implements OnModuleInit {
       templateCode: this.configService.get<string>('sms.templateCode') ?? '',
     }
     if (!isSmsConfigured(smsConfig)) {
-      this.logger.error('生产环境必须配置阿里云短信通道（SMS_ACCESS_KEY_ID / SMS_ACCESS_KEY_SECRET / SMS_SIGN_NAME / SMS_TEMPLATE_CODE）')
-      throw new Error('短信通道配置缺失，服务拒绝启动')
+      if (allowFallback) {
+        this.logger.warn('生产环境短信通道未配置，ALLOW_CHANNEL_FALLBACK 开启降级 log 通道（资质就绪后配置 SMS_* 并移除开关）')
+      }
+      else {
+        this.logger.error('生产环境必须配置阿里云短信通道（SMS_ACCESS_KEY_ID / SMS_ACCESS_KEY_SECRET / SMS_SIGN_NAME / SMS_TEMPLATE_CODE）')
+        throw new Error('短信通道配置缺失，服务拒绝启动')
+      }
     }
     const mailConfig: MailChannelConfig = {
       host: this.configService.get<string>('mail.host') ?? '',
@@ -147,8 +154,13 @@ export class MemberModule implements OnModuleInit {
       from: this.configService.get<string>('mail.from') ?? '',
     }
     if (!isMailConfigured(mailConfig)) {
-      this.logger.error('生产环境必须配置 SMTP 邮件通道（MAIL_HOST / MAIL_PORT / MAIL_USER / MAIL_PASS / MAIL_FROM）')
-      throw new Error('邮件通道配置缺失，服务拒绝启动')
+      if (allowFallback) {
+        this.logger.warn('生产环境邮件通道未配置，ALLOW_CHANNEL_FALLBACK 开启降级 log 通道（资质就绪后配置 MAIL_* 并移除开关）')
+      }
+      else {
+        this.logger.error('生产环境必须配置 SMTP 邮件通道（MAIL_HOST / MAIL_PORT / MAIL_USER / MAIL_PASS / MAIL_FROM）')
+        throw new Error('邮件通道配置缺失，服务拒绝启动')
+      }
     }
   }
 }

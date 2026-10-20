@@ -1,10 +1,33 @@
-# n-1 服务器全局 nginx 站点配置示例
-# 拷入 /etc/nginx/conf.d/n1.conf（或 sites-enabled/ 后按发行版习惯软链），改 server_name 后 nginx -t && nginx -s reload
-# HTTPS：在 server 块按需补 443 监听与证书；CSP / HSTS 等安全头由本层统一注入（见 docs/架构设计.md）
+# n-1 服务器全局 nginx 站点配置示例（HTTPS 版，ACME 证书）
+# 拷入 /etc/nginx/conf.d/apphub.conf（或 sites-enabled/ 后按发行版习惯软链），
+# 改 server_name 与证书路径后 nginx -t && nginx -s reload
+#
+# 证书安装：acme.sh 签发后不要直接引用 ~/.acme.sh 内部路径，用 install-cert 落到固定位置
+# （续期时 acme.sh 自动覆盖并执行 reloadcmd）：
+#   acme.sh --install-cert -d your-domain.example.com \
+#     --fullchain-file /etc/nginx/ssl/fullchain.cer \
+#     --key-file       /etc/nginx/ssl/key.cer \
+#     --reloadcmd      "nginx -s reload"
+# 通配符证书（*.domain，DNS 验证签发）场景：多个子域站点复用同一对证书文件，
+# install-cert 一次即可，各站点 server 块引用相同路径
+
+# HTTP：跳转 HTTPS（acme.sh 独立 / DNS 模式续期时无需 webroot；
+# 若用 http-01 webroot 模式，需在此 server 内放行 /.well-known/acme-challenge/ 直通）
 server {
     listen 80;
-    # 修改为实际域名（或服务器 IP）
     server_name your-domain.example.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    # nginx >= 1.25.1 写法；旧版改为「listen 443 ssl http2;」
+    http2 on;
+    server_name your-domain.example.com;
+
+    ssl_certificate     /etc/nginx/ssl/fullchain.cer;
+    ssl_certificate_key /etc/nginx/ssl/key.cer;
+    ssl_protocols       TLSv1.2 TLSv1.3;
 
     # 与镜像内 nginx（docker/nginx.conf）保持一致的上传限制
     client_max_body_size 20m;

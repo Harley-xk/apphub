@@ -138,10 +138,8 @@ export class SubscriptionModule implements OnModuleInit {
     const alipay = readAlipayConfig(this.configService)
     const wechatOk = isWechatConfigured(wechat)
     const alipayOk = isAlipayConfigured(alipay)
-    if (!wechatOk && !alipayOk) {
-      this.logger.error('生产环境至少须接入一个真实支付渠道（微信五项 / 支付宝三项，见 .env.example 在线支付段）')
-      throw new Error('支付渠道配置缺失（两渠道全部未配置），服务拒绝启动')
-    }
+    // 部分填写检查前置（配置错误优先于缺配判定，且不受 ALLOW_CHANNEL_FALLBACK 豁免——
+    // 豁免仅放行「全部未配置」；前置同时修正部分填写 + 另一渠道全空时误报「全部未配置」的文案）
     if (!wechatOk && isWechatPartiallyFilled(wechat)) {
       this.logger.error('生产环境微信渠道配置部分填写（配置错误不静默降级）：补全五项必配或清空全部项')
       throw new Error('微信渠道配置不完整，服务拒绝启动')
@@ -149,6 +147,17 @@ export class SubscriptionModule implements OnModuleInit {
     if (!alipayOk && isAlipayPartiallyFilled(alipay)) {
       this.logger.error('生产环境支付宝渠道配置部分填写（配置错误不静默降级）：补全三项必配或清空全部项')
       throw new Error('支付宝渠道配置不完整，服务拒绝启动')
+    }
+    if (!wechatOk && !alipayOk) {
+      // ALLOW_CHANNEL_FALLBACK 显式豁免（上线批次 DEP-5）：商户资质未齐的窗口期降级运行——
+      // 渠道不注册、在线下单报 005200005，线下收款备案不受影响；Mock 永不进生产
+      if (this.configService.get<boolean>('channelFallback') === true) {
+        this.logger.warn('生产环境支付渠道全部未配置，ALLOW_CHANNEL_FALLBACK 开启降级运行：在线下单报 005200005（渠道不可用），线下收款备案不受影响（资质就绪后配置渠道并移除开关）')
+      }
+      else {
+        this.logger.error('生产环境至少须接入一个真实支付渠道（微信五项 / 支付宝三项，见 .env.example 在线支付段）')
+        throw new Error('支付渠道配置缺失（两渠道全部未配置），服务拒绝启动')
+      }
     }
     this.logger.log('subscription 模块已接入（8 权限点，M3 备案 + M5 在线支付渠道，生产渠道装配已校验）')
   }

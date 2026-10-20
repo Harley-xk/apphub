@@ -4,7 +4,7 @@ import { MemberModule } from './member.module'
 import { DEFAULT_MEMBER_JWT_SECRET } from '../../config/configuration'
 
 /** 配置桩：按 key 返回预设值 */
-function makeConfig(values: Record<string, string | number | undefined>) {
+function makeConfig(values: Record<string, string | number | boolean | undefined>) {
   return { get: jest.fn((key: string) => values[key]) }
 }
 
@@ -22,7 +22,7 @@ const PRODUCTION_OK = {
   'mail.from': 'noreply@example.com',
 }
 
-function makeModule(values: Record<string, string | number | undefined>) {
+function makeModule(values: Record<string, string | number | boolean | undefined>) {
   const registry = { registerModule: jest.fn() }
   const module = new MemberModule(makeConfig(values) as never, registry as never)
   return { module, registry }
@@ -53,5 +53,27 @@ describe('MemberModule 启动校验（生产 fail-fast，C7 契约守护）', ()
   it('生产环境沿用开发默认 JWT 密钥应拒绝启动（M2 契约回归）', () => {
     const { module } = makeModule({ ...PRODUCTION_OK, 'member.jwtSecret': DEFAULT_MEMBER_JWT_SECRET })
     expect(() => module.onModuleInit()).toThrow('MEMBER_JWT_SECRET')
+  })
+
+  describe('ALLOW_CHANNEL_FALLBACK 开关（上线批次 DEP-5）', () => {
+    it('生产环境开启开关且短信未配应降级启动不抛错', () => {
+      const { module } = makeModule({ ...PRODUCTION_OK, 'sms.templateCode': '', channelFallback: true })
+      expect(() => module.onModuleInit()).not.toThrow()
+    })
+
+    it('生产环境开启开关且邮件未配应降级启动不抛错', () => {
+      const { module } = makeModule({ ...PRODUCTION_OK, 'mail.host': '', channelFallback: true })
+      expect(() => module.onModuleInit()).not.toThrow()
+    })
+
+    it('生产环境未开启开关（false）时缺配仍应拒绝启动', () => {
+      const { module } = makeModule({ ...PRODUCTION_OK, 'sms.templateCode': '', channelFallback: false })
+      expect(() => module.onModuleInit()).toThrow('短信通道配置缺失')
+    })
+
+    it('开关不豁免 MEMBER_JWT_SECRET 校验（密钥无资质依赖，必须配置）', () => {
+      const { module } = makeModule({ ...PRODUCTION_OK, 'member.jwtSecret': DEFAULT_MEMBER_JWT_SECRET, channelFallback: true })
+      expect(() => module.onModuleInit()).toThrow('MEMBER_JWT_SECRET')
+    })
   })
 })

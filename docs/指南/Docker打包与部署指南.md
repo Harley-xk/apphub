@@ -76,18 +76,20 @@ Docker 容器 n1（前后端单镜像，镜像内 nginx :80）
 curl -fsSL https://get.docker.com | sh
 
 # 2. 创建部署目录，放入编排与配置文件（文件内容取自仓库 deploy/ 目录）
-mkdir -p /opt/n1
+mkdir -p /opt/n1/pay-certs
 #   - deploy/docker-compose.yml      → /opt/n1/docker-compose.yml
 #   - deploy/server.env.example      → /opt/n1/server.env（务必修改占位值）
 vim /opt/n1/server.env
 
-# 3. 全局 nginx 站点配置（按实际域名 / 证书补全后软链或拷入 conf.d）
-#   deploy/nginx-gateway.conf.example → /etc/nginx/conf.d/n1.conf
+# 3. 全局 nginx 站点配置（示例已含 443 与 acme.sh install-cert 用法，按域名 / 证书路径补全后拷入 conf.d）
+#   deploy/nginx-gateway.conf.example → /etc/nginx/conf.d/apphub.conf
 nginx -t && nginx -s reload
 
 # 4. 首次拉起（镜像由流水线分发后自动完成；也可先手动拉起验证链路）
 docker compose -f /opt/n1/docker-compose.yml up -d
 ```
+
+`/opt/n1/pay-certs/`：支付商户 PEM 证书目录（M5 渠道资质就绪后放微信 `apiclient_key.pem`、支付宝应用私钥 / 公钥），compose 已挂载到容器 `/pay-certs`，`server.env` 中 `*_PRIVATE_KEY_PATH` / `*_PUBLIC_KEY_PATH` 填容器内路径。
 
 `server.env` 必改项见 [§7 配置参考](#7-配置参考参考-serverenv)；占位密钥未改时应用会启动失败（fail-fast 校验），属预期防护。
 
@@ -141,6 +143,8 @@ sh deploy/deploy.sh
 
 ## 7. 配置参考（server.env）
 
+「必改」：✅ 无条件必配；△ 条件必配（按业务就绪情况）；— 可选。
+
 | 变量 | 必改 | 说明 |
 | --- | --- | --- |
 | `NODE_ENV` | — | 固定 `production` |
@@ -148,9 +152,22 @@ sh deploy/deploy.sh
 | `DB_HOST` / `DB_PORT` / `DB_USERNAME` / `DB_PASSWORD` / `DB_DATABASE` | ✅ | 外置 PostgreSQL 连接信息；同机部署 `DB_HOST=host.docker.internal`，独立数据库填内网 IP |
 | `DB_SYNC` | — | 保持 `false`：生产强制关闭，建表与升级由启动迁移执行（ADR-005） |
 | `JWT_SECRET` | ✅ | 长随机串；沿用开发默认值会启动失败（fail-fast） |
+| `MEMBER_JWT_SECRET` | ✅ | member 域（终端用户令牌）独立密钥；沿用开发默认值同样启动失败 |
+| `MEMBER_ACCESS_EXPIRES_HOURS` / `MEMBER_REFRESH_EXPIRES_DAYS` | — | 终端令牌时效，默认 8 小时 / 30 天 |
 | `USER_INIT_PASSWORD` | ✅ | 种子账号 admin 的初始口令 |
 | `SIGNATURE_ENABLED` / `SIGNATURE_SECRET` | ✅ | 签名开关与密钥；开启时密钥须与前端构建注入的 `VITE_SIGN_SECRET` 一致 |
 | `SIGNATURE_EXPIRE_MS` | — | 签名时间窗，默认 300000（5 分钟） |
+| `RATE_LIMIT_LIMIT` / `RATE_LIMIT_WINDOW_MS` | — | 开放 API 限流（AppKey + IP 滑动窗口），默认 60 次 / 60 秒 |
+| `OSS_REGION` / `OSS_BUCKET` / `OSS_ACCESS_KEY_ID` / `OSS_ACCESS_KEY_SECRET` | △ | 安装包分发（appcenter）；不配不影响启动，上传相关接口返回「存储未配置」；桶 CORS 须放行管理后台 Origin（PUT/POST/GET + ETag 暴露头） |
+| `STS_ROLE_ARN` | △ | STS 直传凭证签发的 RAM 角色（策略仅授 `packages/*` PutObject）；缺失时仅上传凭证接口拒绝 |
+| `SMS_ACCESS_KEY_ID` / `SMS_ACCESS_KEY_SECRET` / `SMS_SIGN_NAME` / `SMS_TEMPLATE_CODE` | △ | 阿里云短信验证码通道；生产缺配启动失败（`ALLOW_CHANNEL_FALLBACK=true` 时降级 log 通道） |
+| `MAIL_HOST` / `MAIL_PORT` / `MAIL_USER` / `MAIL_PASS` / `MAIL_FROM` | △ | SMTP 邮件验证码通道；fail-fast 与降级规则同短信 |
+| `WECHAT_PAY_APP_ID` / `WECHAT_PAY_MCH_ID` / `WECHAT_PAY_CERT_SERIAL` / `WECHAT_PAY_PRIVATE_KEY_PATH` / `WECHAT_PAY_APIV3_KEY` | △ | 微信 Native 渠道（五项齐备启用该渠道）；PEM 放 `/opt/n1/pay-certs/`，路径填容器内 `/pay-certs/<文件名>` |
+| `WECHAT_PAY_PUBLIC_KEY_SERIAL` / `WECHAT_PAY_PUBLIC_KEY_PATH` | — | 微信公钥模式（2024 后新商户）；不配则平台证书模式自动拉取 |
+| `ALIPAY_APP_ID` / `ALIPAY_PRIVATE_KEY_PATH` / `ALIPAY_PUBLIC_KEY_PATH` | △ | 支付宝当面付渠道（三项齐备启用）；PEM 路径规则同上 |
+| `ALIPAY_GATEWAY` | — | 默认正式网关，沙箱联调改沙箱网关 |
+| `PAY_PUBLIC_BASE_URL` | △ | 回调公网地址：填站点完整域名（`https://…`）；配置后预下单显式传 notify_url |
+| `ALLOW_CHANNEL_FALLBACK` | △ | **通道降级开关（上线批次 DEP-5）**：默认 `false` 维持生产 fail-fast；资质报备未齐的窗口期置 `true`——短信 / 邮件降级 log 通道、支付渠道不注册（在线下单报 005200005，线下收款备案不受影响）。仅豁免「全部未配置」，部分填写仍启动失败；Mock 支付永不进生产。资质就绪后配真实通道并改回 `false` |
 | `SWAGGER_ENABLED` | — | 生产建议 `false`（关闭 `/api-docs`） |
 
 修改 `server.env` 后需重启容器生效：`docker compose -f /opt/n1/docker-compose.yml up -d`（重建容器读取新配置）。
@@ -160,6 +177,7 @@ sh deploy/deploy.sh
 | 现象 | 排查 |
 | --- | --- |
 | 容器反复重启，日志含数据库等待超时 | `server.env` 的 `DB_*` 配置有误或数据库未放行容器访问；同机数据库确认 PostgreSQL 监听地址包含 docker 网桥（`listen_addresses` 与 `pg_hba.conf`） |
+| 容器反复重启，日志含短信 / 邮件 / 支付通道 fail-fast | 资质窗口期在 `server.env` 置 `ALLOW_CHANNEL_FALLBACK=true` 降级上线；或补全对应通道配置（部分填写属配置错误，开关不豁免） |
 | 登录成功但所有写请求失败 | 前端 `VITE_SIGN_SECRET`（构建期注入）与后端 `SIGNATURE_SECRET`（运行期注入）不一致，两边对齐后重新构建 / 重启 |
 | 页面白屏 / 静态资源 404 | 全局 nginx 与镜像内 nginx 均约定部署在域名根路径（`/`），子路径部署需调整 Vite `base` 与两份 nginx 配置 |
 | 上传文件 413 | 两级 nginx 均已设 `client_max_body_size 20m`，超限自行上调（`deploy/nginx-gateway.conf.example` 与 `docker/nginx.conf` 同步改） |

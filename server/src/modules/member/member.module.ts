@@ -64,9 +64,10 @@ import { PermissionRegistry } from '../system/permissions'
       provide: SMS_CODE_SENDER,
       inject: [ConfigService],
       useFactory: (configService: ConfigService): CodeSender => {
+        // AK 复用全局 aliyun 段（与 OSS 共用同一 RAM 子账号），sms 段仅持有签名与模板
         const smsConfig: SmsChannelConfig = {
-          accessKeyId: configService.get<string>('sms.accessKeyId') ?? '',
-          accessKeySecret: configService.get<string>('sms.accessKeySecret') ?? '',
+          accessKeyId: configService.get<string>('aliyun.accessKeyId') ?? '',
+          accessKeySecret: configService.get<string>('aliyun.accessKeySecret') ?? '',
           signName: configService.get<string>('sms.signName') ?? '',
           templateCode: configService.get<string>('sms.templateCode') ?? '',
         }
@@ -131,18 +132,19 @@ export class MemberModule implements OnModuleInit {
     // 验证码通道生产 fail-fast（C7）：配置缺失即拒绝启动，不允许生产环境静默走 log 降级；
     // ALLOW_CHANNEL_FALLBACK 显式豁免（上线批次 DEP-5）：资质报备未齐的窗口期降级 log 运行
     const allowFallback = this.configService.get<boolean>('channelFallback') === true
+    // AK 复用全局 aliyun 段（与 OSS 共用同一 RAM 子账号），sms 段仅持有签名与模板
     const smsConfig: SmsChannelConfig = {
-      accessKeyId: this.configService.get<string>('sms.accessKeyId') ?? '',
-      accessKeySecret: this.configService.get<string>('sms.accessKeySecret') ?? '',
+      accessKeyId: this.configService.get<string>('aliyun.accessKeyId') ?? '',
+      accessKeySecret: this.configService.get<string>('aliyun.accessKeySecret') ?? '',
       signName: this.configService.get<string>('sms.signName') ?? '',
       templateCode: this.configService.get<string>('sms.templateCode') ?? '',
     }
     if (!isSmsConfigured(smsConfig)) {
       if (allowFallback) {
-        this.logger.warn('生产环境短信通道未配置，ALLOW_CHANNEL_FALLBACK 开启降级 log 通道（资质就绪后配置 SMS_* 并移除开关）')
+        this.logger.warn('生产环境短信通道未配置，ALLOW_CHANNEL_FALLBACK 开启降级 log 通道（资质就绪后配置 ALI_ACCESS_KEY_* / SMS_* 并移除开关）')
       }
       else {
-        this.logger.error('生产环境必须配置阿里云短信通道（SMS_ACCESS_KEY_ID / SMS_ACCESS_KEY_SECRET / SMS_SIGN_NAME / SMS_TEMPLATE_CODE）')
+        this.logger.error('生产环境必须配置阿里云短信通道（ALI_ACCESS_KEY_ID / ALI_ACCESS_KEY_SECRET / SMS_SIGN_NAME / SMS_TEMPLATE_CODE）')
         throw new Error('短信通道配置缺失，服务拒绝启动')
       }
     }

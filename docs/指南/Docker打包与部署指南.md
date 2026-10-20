@@ -158,9 +158,10 @@ sh deploy/deploy.sh
 | `SIGNATURE_ENABLED` / `SIGNATURE_SECRET` | ✅ | 签名开关与密钥；开启时密钥须与前端构建注入的 `VITE_SIGN_SECRET` 一致 |
 | `SIGNATURE_EXPIRE_MS` | — | 签名时间窗，默认 300000（5 分钟） |
 | `RATE_LIMIT_LIMIT` / `RATE_LIMIT_WINDOW_MS` | — | 开放 API 限流（AppKey + IP 滑动窗口），默认 60 次 / 60 秒 |
-| `OSS_REGION` / `OSS_BUCKET` / `OSS_ACCESS_KEY_ID` / `OSS_ACCESS_KEY_SECRET` | △ | 安装包分发（appcenter）；不配不影响启动，上传相关接口返回「存储未配置」；桶 CORS 须放行管理后台 Origin（PUT/POST/GET + ETag 暴露头） |
+| `ALI_ACCESS_KEY_ID` / `ALI_ACCESS_KEY_SECRET` | △ | 全局阿里云 AK（整个应用唯一一组）：OSS 与短信通道共用同一 RAM 子账号（同时授 OSS 与 `dysmsapi:SendSms` 权限） |
+| `OSS_REGION` / `OSS_BUCKET` | △ | 安装包分发（appcenter），AK 经上方 `ALI_ACCESS_KEY_*`；不配不影响启动，上传相关接口返回「存储未配置」；桶 CORS 须放行管理后台 Origin（PUT/POST/GET + ETag 暴露头） |
 | `STS_ROLE_ARN` | △ | STS 直传凭证签发的 RAM 角色（策略仅授 `packages/*` PutObject）；缺失时仅上传凭证接口拒绝 |
-| `SMS_ACCESS_KEY_ID` / `SMS_ACCESS_KEY_SECRET` / `SMS_SIGN_NAME` / `SMS_TEMPLATE_CODE` | △ | 阿里云短信验证码通道；生产缺配启动失败（`ALLOW_CHANNEL_FALLBACK=true` 时降级 log 通道） |
+| `SMS_SIGN_NAME` / `SMS_TEMPLATE_CODE` | △ | 阿里云短信验证码通道（AK 经 `ALI_ACCESS_KEY_*`）；生产缺配启动失败（`ALLOW_CHANNEL_FALLBACK=true` 时降级 log 通道）；当前模板 `SMS_512656603`（签名「张家港智汇冰芯」） |
 | `MAIL_HOST` / `MAIL_PORT` / `MAIL_USER` / `MAIL_PASS` / `MAIL_FROM` | △ | SMTP 邮件验证码通道；fail-fast 与降级规则同短信 |
 | `WECHAT_PAY_APP_ID` / `WECHAT_PAY_MCH_ID` / `WECHAT_PAY_CERT_SERIAL` / `WECHAT_PAY_PRIVATE_KEY_PATH` / `WECHAT_PAY_APIV3_KEY` | △ | 微信 Native 渠道（五项齐备启用该渠道）；PEM 放 `/opt/n1/pay-certs/`，路径填容器内 `/pay-certs/<文件名>` |
 | `WECHAT_PAY_PUBLIC_KEY_SERIAL` / `WECHAT_PAY_PUBLIC_KEY_PATH` | — | 微信公钥模式（2024 后新商户）；不配则平台证书模式自动拉取 |

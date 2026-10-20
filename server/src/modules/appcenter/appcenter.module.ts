@@ -50,19 +50,14 @@ import { VersionService } from './version/version.service'
     PackageService,
     OpenUpdateService,
     {
-      // OSS 四项（region / bucket / AK / SK）齐备装配真实实现，否则未配置 stub（服务正常启动）
+      // OSS（region + bucket + 全局 aliyun AK）齐备装配真实实现，否则未配置 stub（服务正常启动）；
+      // AK 与短信通道共用顶层 aliyun 段（整个应用唯一一组 AK）
       provide: STORAGE_SERVICE,
       useFactory: (configService: ConfigService) => {
-        const oss = configService.get<{
-          region: string
-          bucket: string
-          accessKeyId: string
-          accessKeySecret: string
-          stsRoleArn: string
-          stsSessionName: string
-        }>('oss')
-        if (oss?.region && oss.bucket && oss.accessKeyId && oss.accessKeySecret)
-          return new OssStorageService(oss)
+        const aliyun = configService.get<{ accessKeyId: string, accessKeySecret: string }>('aliyun')
+        const oss = configService.get<{ region: string, bucket: string, stsRoleArn: string, stsSessionName: string }>('oss')
+        if (oss?.region && oss.bucket && aliyun?.accessKeyId && aliyun.accessKeySecret)
+          return new OssStorageService({ ...aliyun, ...oss })
         return new UnconfiguredStorageService()
       },
       inject: [ConfigService],

@@ -11,8 +11,9 @@ function makeConfig(values: Record<string, string | number | boolean | undefined
 const PRODUCTION_OK = {
   env: 'production',
   'member.jwtSecret': 'prod-secret-not-default',
-  'sms.accessKeyId': 'ak',
-  'sms.accessKeySecret': 'sk',
+  // 短信 AK 复用全局 aliyun 段（与 OSS 共用同一 RAM 子账号）
+  'aliyun.accessKeyId': 'ak',
+  'aliyun.accessKeySecret': 'sk',
   'sms.signName': '签名',
   'sms.templateCode': 'SMS_001',
   'mail.host': 'smtp.example.com',

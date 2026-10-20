@@ -55,11 +55,15 @@ export default () => ({
     // 窗口长度（毫秒），默认 1 分钟
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS ?? String(60 * 1000), 10),
   },
+  aliyun: {
+    // 全局阿里云 AccessKey（整个应用唯一一组 AK）：OSS 与短信通道共用同一 RAM 子账号，
+    // 子账号需同时授予 OSS 相关与短信发送（sms:SendSms）权限
+    accessKeyId: process.env.ALI_ACCESS_KEY_ID ?? '',
+    accessKeySecret: process.env.ALI_ACCESS_KEY_SECRET ?? '',
+  },
   sms: {
-    // 阿里云短信（M4 验证码通道，认证方式扩展设计 §3.2）：四项齐备视为已配置；
-    // 生产缺配启动 fail-fast，非生产降级 log 通道；AK 建议独立 RAM 子账号（仅授短信发送权限）
-    accessKeyId: process.env.SMS_ACCESS_KEY_ID ?? '',
-    accessKeySecret: process.env.SMS_ACCESS_KEY_SECRET ?? '',
+    // 阿里云短信（M4 验证码通道，认证方式扩展设计 §3.2）：AK 复用全局 aliyun 段，
+    // 本段签名 + 模板两项齐备且 aliyun AK 齐备视为已配置；生产缺配启动 fail-fast，非生产降级 log 通道
     signName: process.env.SMS_SIGN_NAME ?? '',
     templateCode: process.env.SMS_TEMPLATE_CODE ?? '',
   },
@@ -99,12 +103,11 @@ export default () => ({
   },
   oss: {
     // 阿里云 OSS 对象存储（应用安装包分发，见 docs/应用管理平台/应用与版本管理设计.md §2.5）
-    // 前四项齐备视为 OSS 已配置（未配置时服务正常启动，存储接口统一抛存储未配置错误）；
+    // AK 经顶层 aliyun 段注入（全局共用，不在本段重复配置）；
+    // region + bucket + aliyun AK 齐备视为 OSS 已配置（未配置时服务正常启动，存储接口统一抛存储未配置错误）；
     // 后两项 STS 仅直传凭证签发用，缺失时上传凭证接口单独拒绝
     region: process.env.OSS_REGION ?? '',
     bucket: process.env.OSS_BUCKET ?? '',
-    accessKeyId: process.env.OSS_ACCESS_KEY_ID ?? '',
-    accessKeySecret: process.env.OSS_ACCESS_KEY_SECRET ?? '',
     // STS 直传凭证签发用 RAM 角色与会话名（角色策略仅授 packages/* PutObject）
     stsRoleArn: process.env.STS_ROLE_ARN ?? '',
     stsSessionName: process.env.STS_SESSION_NAME ?? 'apphub-upload',

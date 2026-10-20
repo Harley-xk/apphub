@@ -47,8 +47,8 @@ export class AliyunSmsSender implements CodeSender {
       phoneNumbers: identifier,
       signName: this.signName,
       templateCode: this.templateCode,
-      // 单通用模板两变量：code + 有效期分钟数（C8）
-      templateParam: JSON.stringify({ code, minutes: Math.floor(VERIFY_CODE_TTL_MS / 60_000) }),
+      // 单通用模板两变量（C8）：code 仅数字（六位验证码）+ time 仅数字 1-2 位（有效期分钟数）
+      templateParam: JSON.stringify({ code, time: Math.floor(VERIFY_CODE_TTL_MS / 60_000) }),
     })
     const response = await this.client.sendSms(request)
     // 阿里云业务失败不抛 HTTP 异常，以 body.code 区分（OK 之外一律视为发送失败）

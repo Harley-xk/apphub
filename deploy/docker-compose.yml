@@ -1,0 +1,22 @@
+# n-1 单镜像运行编排（放服务器 /opt/n1/，与 server.env 同目录）
+# 镜像由云效主机部署经 deploy.sh 加载（n1:latest），首次初始化见 docs/指南/Docker打包与部署指南.md
+services:
+  n1:
+    image: n1:latest
+    container_name: n1
+    restart: unless-stopped
+    ports:
+      # 仅本机监听，由服务器全局 nginx 转发进入
+      - "127.0.0.1:8080:80"
+    env_file:
+      # 外置运行配置（DB / JWT / 签名密钥等），修改后重建容器生效
+      - ./server.env
+    extra_hosts:
+      # 数据库与本机同机时，DB_HOST 可填 host.docker.internal
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s

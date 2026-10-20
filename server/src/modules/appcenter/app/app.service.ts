@@ -132,6 +132,9 @@ export class AppService {
 
   /** 按 AppKey 查应用（开放 API 有效性校验与限流策略源用；不限状态——停用语义由开放层处理，软删行不可见） */
   async findByAppKey(appKey: string): Promise<AppEntity | null> {
+    // 空值短路：TypeORM 会丢弃 undefined 的 where 条件退化为「任意一行」，缺 X-App-Key 的请求必须按无效 AppKey 拒绝
+    if (!appKey)
+      return null
     return this.appRepository.findOne({ where: { appKey } })
   }
 

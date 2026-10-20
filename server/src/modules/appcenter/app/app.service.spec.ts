@@ -1,4 +1,4 @@
-import { describe, expect, it } from '@jest/globals'
+import { describe, expect, it, jest } from '@jest/globals'
 
 import type { AppChannelEntity } from '../entities/app-channel.entity'
 import type { AppEntity } from '../entities/app.entity'
@@ -73,6 +73,15 @@ describe('AppService', () => {
     await service.create(CREATE_DTO)
     expect(savedChannels).toHaveLength(1)
     expect(savedChannels[0]).toMatchObject({ code: 'stable', name: '稳定版', status: 'enabled' })
+  })
+
+  it('按 AppKey 查应用时空值应短路返回 null 且不触达仓储（缺 X-App-Key 不得退化为任意行）', async () => {
+    const findOne = jest.fn()
+    const service = new AppService({ findOne } as never, {} as never)
+    // 运行时缺 X-App-Key 头时 @Headers 装饰器注入 undefined（类型断言模拟该运行时形态）
+    await expect(service.findByAppKey(undefined as unknown as string)).resolves.toBeNull()
+    await expect(service.findByAppKey('')).resolves.toBeNull()
+    expect(findOne).not.toHaveBeenCalled()
   })
 
   it('注册应用应响应完整凭证（创建后仅此一次可见，D22）', async () => {

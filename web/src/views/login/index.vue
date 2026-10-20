@@ -11,6 +11,7 @@ import { ElMessage } from 'element-plus'
 import { reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import BrandMark from '@/components/BrandMark/index.vue'
 import { useAuthStore } from '@/stores/auth'
 
 defineOptions({ name: 'Login' })
@@ -51,7 +52,7 @@ async function handleLogin(): Promise<void> {
   <div class="login-page">
     <main class="login-card">
       <header class="login-brand">
-        <span class="login-logo">A</span>
+        <BrandMark class="login-logo" />
         <h1 class="login-title">
           应用管理平台
         </h1>
@@ -125,18 +126,12 @@ async function handleLogin(): Promise<void> {
   margin-bottom: 28px;
 }
 
-/* 品牌字标：主色底白字 */
+/* 品牌图形标：三花聚心（BrandMark，色彩走 --apphub-logo-* token 明暗自动翻转；规格见 docs/前端/品牌与Logo设计.md） */
 .login-logo {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  display: block;
   width: 44px;
   height: 44px;
-  border-radius: 12px;
-  font-size: 18px;
-  font-weight: 700;
-  color: #fff;
-  background: var(--apphub-color-primary);
+  margin: 0 auto;
 }
 
 .login-title {

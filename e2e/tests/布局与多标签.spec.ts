@@ -49,6 +49,9 @@ test.describe('布局门面', () => {
 
     // 顶栏品牌（类选择器精确断言，避免与首页大标题同文案冲突）
     await expect(page.locator('.apphub-logo-title')).toHaveText('应用管理平台')
+    // 品牌图形标为浮卡层叠 SVG（防占位字母回退，规格见 docs/前端/品牌与Logo设计.md）
+    await expect(page.locator('svg.apphub-logo-mark')).toBeVisible()
+    await expect(page.locator('link[rel="icon"]')).toHaveAttribute('href', /favicon\.svg$/)
     // 侧栏菜单（role=menubar 契约）
     await expect(page.getByRole('menuitem', { name: '首页' })).toBeVisible()
     // 标签栏首页固定签 + 右侧操作

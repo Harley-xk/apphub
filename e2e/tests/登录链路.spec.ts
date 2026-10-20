@@ -12,6 +12,8 @@ test.beforeEach(async ({ request }) => {
 test.describe('登录链路', () => {
   test('登录成功：进入首页并显示用户昵称', async ({ page }) => {
     await page.goto('/login')
+    // 品牌图形标为浮卡层叠 SVG（防占位字母回退，规格见 docs/前端/品牌与Logo设计.md）
+    await expect(page.locator('svg.login-logo')).toBeVisible()
     await loginViaUi(page, 'admin', 'admin123')
 
     // 落首页 + 顶栏用户区显示种子账号昵称（.user-entry 为选择器契约）

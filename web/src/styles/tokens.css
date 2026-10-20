@@ -12,6 +12,11 @@
   --apphub-color-primary-active: #115e59;
   --apphub-color-primary-bg-light: #d6f0ec;
 
+  /* 品牌 logo 冰蓝（承 WITICE 母品牌，logo 与 UI 主色不同源，见 docs/前端/品牌与Logo设计.md §4） */
+  --apphub-logo-ice-a: #9fd0f0;
+  --apphub-logo-ice-b: #38a3e8;
+  --apphub-logo-tint: rgba(86, 182, 240, 0.08);
+
   /* 画布：近纯色浅冷灰（不做渐变，卡片以边框 + 阴影定界） */
   --apphub-canvas: #f3f5f7;
 
@@ -58,6 +63,11 @@ html.dark {
   --apphub-color-primary-hover: #2dd4bf;
   --apphub-color-primary-active: #5eead4;
   --apphub-color-primary-bg-light: rgba(20, 184, 166, 0.16);
+
+  /* logo 冰蓝整体提亮一档、tint 加浓（母品牌深底版策略） */
+  --apphub-logo-ice-a: #c9e6f8;
+  --apphub-logo-ice-b: #5cb4ec;
+  --apphub-logo-tint: rgba(86, 182, 240, 0.12);
 
   --apphub-canvas: #101318;
 

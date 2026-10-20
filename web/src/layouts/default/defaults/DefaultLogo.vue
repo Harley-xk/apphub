@@ -2,14 +2,18 @@
  * 作者: Harley-xk
  * 创建: 2026-09-28
  *
- * 描述: 顶栏品牌区默认组件（layout:logo 槽位兜底）：青碧方块标 + 系统名，业务可经槽位注册表替换
+ * 描述: 顶栏品牌区默认组件（layout:logo 槽位兜底）：三花聚心品牌标（BrandMark）+ 系统名，业务可经槽位注册表替换；图形规格见 docs/前端/品牌与Logo设计.md
 -->
 <template>
   <div class="apphub-logo">
-    <span class="apphub-logo-mark">N</span>
+    <BrandMark class="apphub-logo-mark" />
     <span class="apphub-logo-title">应用管理平台</span>
   </div>
 </template>
+
+<script setup lang="ts">
+import BrandMark from '@/components/BrandMark/index.vue'
+</script>
 
 <style scoped>
 .apphub-logo {
@@ -22,15 +26,7 @@
 .apphub-logo-mark {
   width: 30px;
   height: 30px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px;
-  font-size: 16px;
-  font-weight: 700;
-  color: #fff;
-  /* 纯色主色方块（区别于渐变标），暗色下主色自动提亮 */
-  background: var(--apphub-color-primary);
+  flex-shrink: 0;
 }
 
 .apphub-logo-title {

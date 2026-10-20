@@ -11,7 +11,7 @@
 Ubuntu 服务器 · 全局 nginx（已有）          ← 站点配置见 deploy/nginx-gateway.conf.example
   │ proxy_pass http://127.0.0.1:8080
   ▼
-Docker 容器 n1（前后端单镜像，镜像内 nginx :80）
+Docker 容器 apphub（前后端单镜像，镜像内 nginx :80）
   ├── 前端静态资源 /usr/share/nginx/html（SPA，try_files 回退）
   ├── /api、/api-docs ──反代──▶ 容器内 NestJS（node dist/main.js :3000）
   │                                 │
@@ -35,8 +35,8 @@ Docker 容器 n1（前后端单镜像，镜像内 nginx :80）
 | `.dockerignore`（根） | 排除 `.git`、`node_modules`、`dist`、`server/.env` 等，瘦身构建上下文并防止本地配置泄入镜像 |
 | `docker/nginx.conf` | 镜像内 nginx 站点配置：静态资源缓存、SPA 回退、`/api` 反代 |
 | `docker/entrypoint.sh` | 容器入口：等数据库 → 跑迁移 → 起 nginx → exec node（PID 1，SIGTERM 优雅关停） |
-| `deploy/docker-compose.yml` | 服务器运行编排：端口映射、env_file、健康检查、重启策略（放 `/opt/n1/`） |
-| `deploy/server.env.example` | 外置运行配置模板（复制为 `server.env` 后修改，放 `/opt/n1/`） |
+| `deploy/docker-compose.yml` | 服务器运行编排：端口映射、env_file、健康检查、重启策略（放 `/opt/apphub/`） |
+| `deploy/server.env.example` | 外置运行配置模板（复制为 `server.env` 后修改，放 `/opt/apphub/`） |
 | `deploy/nginx-gateway.conf.example` | 服务器全局 nginx 站点配置示例 |
 | `deploy/deploy.sh` | 云效主机部署脚本：`docker load` + `docker compose up -d` + 清理悬空层 |
 
@@ -76,20 +76,20 @@ Docker 容器 n1（前后端单镜像，镜像内 nginx :80）
 curl -fsSL https://get.docker.com | sh
 
 # 2. 创建部署目录，放入编排与配置文件（文件内容取自仓库 deploy/ 目录）
-mkdir -p /opt/n1/pay-certs
-#   - deploy/docker-compose.yml      → /opt/n1/docker-compose.yml
-#   - deploy/server.env.example      → /opt/n1/server.env（务必修改占位值）
-vim /opt/n1/server.env
+mkdir -p /opt/apphub/pay-certs
+#   - deploy/docker-compose.yml      → /opt/apphub/docker-compose.yml
+#   - deploy/server.env.example      → /opt/apphub/server.env（务必修改占位值）
+vim /opt/apphub/server.env
 
 # 3. 全局 nginx 站点配置（示例已含 443 与 acme.sh install-cert 用法，按域名 / 证书路径补全后拷入 conf.d）
 #   deploy/nginx-gateway.conf.example → /etc/nginx/conf.d/apphub.conf
 nginx -t && nginx -s reload
 
 # 4. 首次拉起（镜像由流水线分发后自动完成；也可先手动拉起验证链路）
-docker compose -f /opt/n1/docker-compose.yml up -d
+docker compose -f /opt/apphub/docker-compose.yml up -d
 ```
 
-`/opt/n1/pay-certs/`：支付商户 PEM 证书目录（M5 渠道资质就绪后放微信 `apiclient_key.pem`、支付宝应用私钥 / 公钥），compose 已挂载到容器 `/pay-certs`，`server.env` 中 `*_PRIVATE_KEY_PATH` / `*_PUBLIC_KEY_PATH` 填容器内路径。
+`/opt/apphub/pay-certs/`：支付商户 PEM 证书目录（M5 渠道资质就绪后放微信 `apiclient_key.pem`、支付宝应用私钥 / 公钥），compose 已挂载到容器 `/pay-certs`，`server.env` 中 `*_PRIVATE_KEY_PATH` / `*_PUBLIC_KEY_PATH` 填容器内路径。
 
 `server.env` 必改项见 [§7 配置参考](#7-配置参考参考-serverenv)；占位密钥未改时应用会启动失败（fail-fast 校验），属预期防护。
 
@@ -110,14 +110,14 @@ docker compose -f /opt/n1/docker-compose.yml up -d
 set -e
 
 # 构建镜像：latest 供 compose 引用，编号 tag 供服务器侧回滚定位
-docker build -t n1:latest -t "n1:${BUILD_NUMBER:-local}" \
+docker build -t apphub:latest -t "apphub:${BUILD_NUMBER:-local}" \
   --build-arg VITE_SIGN_SECRET="$VITE_SIGN_SECRET" .
 
 # 导出压缩 tar 作为构建产物（同时保留两个 tag）
-docker save n1:latest "n1:${BUILD_NUMBER:-local}" | gzip > n1-image.tar.gz
+docker save apphub:latest "apphub:${BUILD_NUMBER:-local}" | gzip > apphub-image.tar.gz
 ```
 
-构建产物勾选上报：`n1-image.tar.gz` 与 `deploy/` 目录（后者供首次初始化与部署脚本使用）。
+构建产物勾选上报：`apphub-image.tar.gz` 与 `deploy/` 目录（后者供首次初始化与部署脚本使用）。
 
 ### 5.3 主机部署阶段
 
@@ -128,16 +128,16 @@ docker save n1:latest "n1:${BUILD_NUMBER:-local}" | gzip > n1-image.tar.gz
 sh deploy/deploy.sh
 ```
 
-部署脚本逻辑：校验 `/opt/n1/server.env` 与 `docker-compose.yml` 就位 → `docker load -i n1-image.tar.gz` → `docker compose up -d` → 清理悬空层（保留带 tag 的历史镜像供回滚）→ 输出容器状态。
+部署脚本逻辑：校验 `/opt/apphub/server.env` 与 `docker-compose.yml` 就位 → `docker load -i apphub-image.tar.gz` → `docker compose up -d` → 清理悬空层（保留带 tag 的历史镜像供回滚）→ 输出容器状态。
 
 ## 6. 日常发布与回滚
 
 - **发布**：push 到 `main` 即全链路自动执行；进度与日志在云效流水线页查看。
-- **验证**：部署后访问全局 nginx 域名的 `/api/health` 应返回健康信息；服务器上 `docker ps` 应见 `n1` 容器 `(healthy)`。
+- **验证**：部署后访问全局 nginx 域名的 `/api/health` 应返回健康信息；服务器上 `docker ps` 应见 `apphub` 容器 `(healthy)`。
 - **回滚（快速）**：服务器上历史镜像以流水线编号为 tag 保留，执行：
   ```bash
-  docker tag n1:<历史编号> n1:latest
-  docker compose -f /opt/n1/docker-compose.yml up -d
+  docker tag apphub:<历史编号> apphub:latest
+  docker compose -f /opt/apphub/docker-compose.yml up -d
   ```
 - **回滚（重建）**：在云效流水线中重跑历史某次成功运行（或 revert 提交后重新触发），适合历史镜像已被清理的场景。
 
@@ -163,7 +163,7 @@ sh deploy/deploy.sh
 | `STS_ROLE_ARN` | △ | STS 直传凭证签发的 RAM 角色（策略仅授 `packages/*` PutObject）；缺失时仅上传凭证接口拒绝 |
 | `SMS_SIGN_NAME` / `SMS_TEMPLATE_CODE` | △ | 阿里云短信验证码通道（AK 经 `ALI_ACCESS_KEY_*`）；生产缺配启动失败（`ALLOW_CHANNEL_FALLBACK=true` 时降级 log 通道）；当前模板 `SMS_512656603`（签名「张家港智汇冰芯」） |
 | `MAIL_HOST` / `MAIL_PORT` / `MAIL_USER` / `MAIL_PASS` / `MAIL_FROM` | △ | SMTP 邮件验证码通道；fail-fast 与降级规则同短信 |
-| `WECHAT_PAY_APP_ID` / `WECHAT_PAY_MCH_ID` / `WECHAT_PAY_CERT_SERIAL` / `WECHAT_PAY_PRIVATE_KEY_PATH` / `WECHAT_PAY_APIV3_KEY` | △ | 微信 Native 渠道（五项齐备启用该渠道）；PEM 放 `/opt/n1/pay-certs/`，路径填容器内 `/pay-certs/<文件名>` |
+| `WECHAT_PAY_APP_ID` / `WECHAT_PAY_MCH_ID` / `WECHAT_PAY_CERT_SERIAL` / `WECHAT_PAY_PRIVATE_KEY_PATH` / `WECHAT_PAY_APIV3_KEY` | △ | 微信 Native 渠道（五项齐备启用该渠道）；PEM 放 `/opt/apphub/pay-certs/`，路径填容器内 `/pay-certs/<文件名>` |
 | `WECHAT_PAY_PUBLIC_KEY_SERIAL` / `WECHAT_PAY_PUBLIC_KEY_PATH` | — | 微信公钥模式（2024 后新商户）；不配则平台证书模式自动拉取 |
 | `ALIPAY_APP_ID` / `ALIPAY_PRIVATE_KEY_PATH` / `ALIPAY_PUBLIC_KEY_PATH` | △ | 支付宝当面付渠道（三项齐备启用）；PEM 路径规则同上 |
 | `ALIPAY_GATEWAY` | — | 默认正式网关，沙箱联调改沙箱网关 |
@@ -171,7 +171,7 @@ sh deploy/deploy.sh
 | `ALLOW_CHANNEL_FALLBACK` | △ | **通道降级开关（上线批次 DEP-5）**：默认 `false` 维持生产 fail-fast；资质报备未齐的窗口期置 `true`——短信 / 邮件降级 log 通道、支付渠道不注册（在线下单报 005200005，线下收款备案不受影响）。仅豁免「全部未配置」，部分填写仍启动失败；Mock 支付永不进生产。资质就绪后配真实通道并改回 `false` |
 | `SWAGGER_ENABLED` | — | 生产建议 `false`（关闭 `/api-docs`） |
 
-修改 `server.env` 后需重启容器生效：`docker compose -f /opt/n1/docker-compose.yml up -d`（重建容器读取新配置）。
+修改 `server.env` 后需重启容器生效：`docker compose -f /opt/apphub/docker-compose.yml up -d`（重建容器读取新配置）。
 
 ## 8. 常见问题
 

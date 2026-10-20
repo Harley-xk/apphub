@@ -1,9 +1,9 @@
-# n-1 单镜像运行编排（放服务器 /opt/n1/，与 server.env 同目录）
-# 镜像由云效主机部署经 deploy.sh 加载（n1:latest），首次初始化见 docs/指南/Docker打包与部署指南.md
+# apphub 单镜像运行编排（放服务器 /opt/apphub/，与 server.env 同目录）
+# 镜像由云效主机部署经 deploy.sh 加载（apphub:latest），首次初始化见 docs/指南/Docker打包与部署指南.md
 services:
-  n1:
-    image: n1:latest
-    container_name: n1
+  apphub:
+    image: apphub:latest
+    container_name: apphub
     restart: unless-stopped
     ports:
       # 仅本机监听，由服务器全局 nginx 转发进入
@@ -12,7 +12,7 @@ services:
       # 外置运行配置（DB / JWT / 签名密钥等），修改后重建容器生效
       - ./server.env
     volumes:
-      # 支付商户 PEM 证书（M5 渠道资质就绪后启用）：宿主机 /opt/n1/pay-certs → 容器 /pay-certs，
+      # 支付商户 PEM 证书（M5 渠道资质就绪后启用）：宿主机 /opt/apphub/pay-certs → 容器 /pay-certs，
       # server.env 的 *_PRIVATE_KEY_PATH / *_PUBLIC_KEY_PATH 填容器内路径 /pay-certs/<文件名>
       - ./pay-certs:/pay-certs
     extra_hosts:

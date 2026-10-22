@@ -6,6 +6,7 @@
 import { expect, test } from '@playwright/test'
 
 import { loginViaApi } from './support/auth'
+import { clickRowAction, rowActionButton } from './support/row-actions'
 
 // 应用管理页列多（约 1150px），默认 1280 视口下出现横向滚动时 vxe 会把 fixed 操作列拆到
 // 独立 fixed wrapper（行内定位不到操作按钮）；加宽视口消除滚动，操作列与数据行合并渲染
@@ -67,7 +68,8 @@ test.describe('应用中心', () => {
     await expect(drawer).toBeVisible()
     const stableRow = drawer.locator('.vxe-body--row').filter({ hasText: 'stable' })
     await expect(stableRow).toBeVisible()
-    await expect(stableRow.getByRole('button', { name: '删除' })).toBeDisabled()
+    // 通道抽屉 110px 列宽装不下「编辑 + 删除」，删除被收纳进「更多操作」popover——先展开再断言禁用态
+    await expect(await rowActionButton(page, stableRow, '删除')).toBeDisabled()
 
     await drawer.getByRole('button', { name: '新增通道' }).click()
     const channelDialog = drawer.locator('.el-dialog').filter({ hasText: '新增通道' })
@@ -76,13 +78,13 @@ test.describe('应用中心', () => {
     await channelDialog.getByRole('button', { name: '确定' }).click()
     const betaRow = drawer.locator('.vxe-body--row').filter({ hasText: 'beta' })
     await expect(betaRow).toBeVisible()
-    await betaRow.getByRole('button', { name: '删除' }).click()
+    await clickRowAction(page, betaRow, '删除')
     await page.locator('.el-message-box').getByRole('button', { name: '确定' }).click()
     await expect(drawer.locator('.vxe-body--row').filter({ hasText: 'beta' })).toHaveCount(0)
     await drawer.locator('.el-drawer__close-btn').click()
 
     // 编辑改名（调用方类型不可改）
-    await row.getByRole('button', { name: '编辑' }).click()
+    await clickRowAction(page, row, '编辑')
     const editDialog = page.locator('.el-dialog').filter({ hasText: '编辑应用' })
     await expect(editDialog.getByRole('radio', { name: /公开客户端/ })).toBeDisabled()
     await editDialog.getByPlaceholder('应用名称').fill(`${name}改`)
@@ -171,7 +173,7 @@ test.describe('应用中心', () => {
     await page.locator('.el-dialog').filter({ hasText: '请立即保存' }).getByRole('button', { name: '我已妥善保存' }).click()
     const appRow = page.locator('.vxe-body--row').filter({ hasText: name }).first()
     await expect(appRow).toBeVisible()
-    await appRow.getByRole('button', { name: '版本' }).click()
+    await clickRowAction(page, appRow, '版本')
 
     // 下钻页：头部应用上下文 + URL 携带 appId
     await expect(page).toHaveURL(/\/appcenter\/version\?appId=/)
@@ -192,7 +194,7 @@ test.describe('应用中心', () => {
     await expect(versionRow.locator('.el-tag--warning')).toHaveText('草稿')
 
     // 安装包抽屉：上传安装包（选择文件即触发流式哈希；提交走 mock 直传链路）
-    await versionRow.getByRole('button', { name: '安装包' }).click()
+    await clickRowAction(page, versionRow, '安装包')
     const pkgDrawer = page.locator('.el-drawer').filter({ hasText: '安装包' })
     await expect(pkgDrawer).toBeVisible()
     await pkgDrawer.getByRole('button', { name: '上传安装包' }).click()
@@ -216,7 +218,7 @@ test.describe('应用中心', () => {
     await pkgDrawer.locator('.el-drawer__close-btn').click()
 
     // 清理闭环：删除草稿版本 → 返回删除应用
-    await versionRow.getByRole('button', { name: '删除' }).click()
+    await clickRowAction(page, versionRow, '删除')
     await page.locator('.el-message-box').getByRole('button', { name: '确定' }).click()
     await expect(page.locator('.el-message').getByText('删除成功')).toBeVisible()
     await page.getByRole('button', { name: '← 返回应用列表' }).click()

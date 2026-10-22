@@ -8,6 +8,7 @@ import { createHmac, randomBytes } from 'node:crypto'
 import { expect, test } from '@playwright/test'
 
 import { loginViaApi } from './support/auth'
+import { clickRowAction } from './support/row-actions'
 
 // 会员列表列多（约 1120px），默认 1280 视口下出现横向滚动时 vxe 会把 fixed 操作列拆到
 // 独立 fixed wrapper（行内定位不到操作按钮）；加宽视口消除滚动，操作列与数据行合并渲染
@@ -101,7 +102,7 @@ test.describe('会员中心', () => {
     await expect(row.locator('.el-tag--success')).toHaveText('正常')
 
     // 详情抽屉：描述信息 + 凭证清单两条（主密码 + 绑定密码，password 标识原样展示）
-    await row.getByRole('button', { name: '详情' }).click()
+    await clickRowAction(page, row, '详情')
     const drawer = page.locator('.el-drawer').filter({ hasText: '会员详情' })
     await expect(drawer).toBeVisible()
     await expect(drawer.getByText(nickname).first()).toBeVisible()
@@ -119,24 +120,24 @@ test.describe('会员中心', () => {
     await passwordDialog.getByRole('button', { name: '我已妥善保存' }).click()
 
     // 解绑第二条凭证：列表剩一条（最后一条密码凭证后端拒绝解绑，不触达）
-    await bindCredentialRow.getByRole('button', { name: '解绑' }).click()
+    await clickRowAction(page, bindCredentialRow, '解绑')
     await page.locator('.el-message-box').getByRole('button', { name: '确定' }).click()
     await expect(page.locator('.el-message').getByText('已解绑')).toBeVisible()
     await expect(drawer.locator('.vxe-body--row').filter({ hasText: `e2ebind${suffix}` })).toHaveCount(0)
     await drawer.locator('.el-drawer__close-btn').click()
 
     // 启停：禁用后标签翻转，再启用恢复
-    await row.getByRole('button', { name: '禁用' }).click()
+    await clickRowAction(page, row, '禁用')
     await page.locator('.el-message-box').getByRole('button', { name: '确定' }).click()
     await expect(page.locator('.el-message').getByText('已禁用')).toBeVisible()
     await expect(row.locator('.el-tag--info')).toHaveText('已禁用')
-    await row.getByRole('button', { name: '启用' }).click()
+    await clickRowAction(page, row, '启用')
     await page.locator('.el-message-box').getByRole('button', { name: '确定' }).click()
     await expect(page.locator('.el-message').getByText('已启用')).toBeVisible()
     await expect(row.locator('.el-tag--success')).toHaveText('正常')
 
     // 删除会员闭环 + 删除应用收尾
-    await row.getByRole('button', { name: '删除' }).click()
+    await clickRowAction(page, row, '删除')
     await page.locator('.el-message-box').getByRole('button', { name: '确定' }).click()
     await expect(page.locator('.el-message').getByText('删除成功')).toBeVisible()
     await expect(page.locator('.vxe-body--row').filter({ hasText: nickname })).toHaveCount(0)
@@ -207,7 +208,7 @@ test.describe('会员中心', () => {
     await page.getByRole('button', { name: '查询' }).click()
     const row = page.locator('.vxe-body--row').filter({ hasText: nickname }).first()
     await expect(row).toBeVisible()
-    await row.getByRole('button', { name: '详情' }).click()
+    await clickRowAction(page, row, '详情')
     const drawer = page.locator('.el-drawer').filter({ hasText: '会员详情' })
     await expect(drawer).toBeVisible()
 
@@ -222,7 +223,7 @@ test.describe('会员中心', () => {
     await drawer.locator('.el-drawer__close-btn').click()
 
     // 收尾：删除会员与应用，不污染种子
-    await row.getByRole('button', { name: '删除' }).click()
+    await clickRowAction(page, row, '删除')
     await page.locator('.el-message-box').getByRole('button', { name: '确定' }).click()
     await expect(page.locator('.el-message').getByText('删除成功')).toBeVisible()
 

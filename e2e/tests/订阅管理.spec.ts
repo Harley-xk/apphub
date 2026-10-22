@@ -7,6 +7,7 @@ import { createHmac, randomBytes } from 'node:crypto'
 import { expect, test, type Locator, type Page } from '@playwright/test'
 
 import { loginViaApi } from './support/auth'
+import { clickRowAction } from './support/row-actions'
 
 // 订单页列多（12 列合计约 1750px），加宽视口避免横向滚动拆 fixed 操作列（同会员页约定）
 test.use({ viewport: { width: 2000, height: 900 } })
@@ -150,17 +151,17 @@ test.describe('订阅管理', () => {
     await page.goto('/subscription/plan')
     await page.getByPlaceholder('计划名模糊匹配').fill(planName)
     await page.getByRole('button', { name: '查询' }).click()
-    await planRow.getByRole('button', { name: '下架' }).click()
+    await clickRowAction(page, planRow, '下架')
     await page.locator('.el-message-box').getByRole('button', { name: '确定' }).click()
     await expect(page.locator('.el-message').getByText('已下架')).toBeVisible()
     await expect(planRow.locator('.el-tag--info')).toHaveText('下架')
-    await planRow.getByRole('button', { name: '上架' }).click()
+    await clickRowAction(page, planRow, '上架')
     await page.locator('.el-message-box').getByRole('button', { name: '确定' }).click()
     await expect(page.locator('.el-message').getByText('已上架')).toBeVisible()
     await expect(planRow.locator('.el-tag--success')).toHaveText('在售')
 
     // 收尾：删除计划（存量实例不受影响）→ 删除会员 → 删除应用
-    await planRow.getByRole('button', { name: '删除' }).click()
+    await clickRowAction(page, planRow, '删除')
     await page.locator('.el-message-box').getByRole('button', { name: '确定' }).click()
     await expect(page.locator('.el-message').getByText('删除成功')).toBeVisible()
     await expect(page.locator('.vxe-body--row').filter({ hasText: planName })).toHaveCount(0)
@@ -169,7 +170,7 @@ test.describe('订阅管理', () => {
     await page.getByPlaceholder('昵称 / 手机 / 邮箱模糊匹配').fill(nickname)
     await page.getByRole('button', { name: '查询' }).click()
     const memberRow = page.locator('.vxe-body--row').filter({ hasText: nickname }).first()
-    await memberRow.getByRole('button', { name: '删除' }).click()
+    await clickRowAction(page, memberRow, '删除')
     await page.locator('.el-message-box').getByRole('button', { name: '确定' }).click()
     await expect(page.locator('.el-message').getByText('删除成功')).toBeVisible()
 

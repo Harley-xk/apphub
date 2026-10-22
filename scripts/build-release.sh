@@ -44,4 +44,6 @@ printf 'version=%s\ncommit=%s\ntime=%s\n' "$VERSION" "$COMMIT" "$(date '+%F %T')
 tar -czf "release/apphub-release-$VERSION.tar.gz" -C "$STAGE" server web-dist release-info
 # 部署脚本随产物上传（产物自包含，部署阶段执行 sh release.sh 即可）
 cp deploy/release.sh release/
+# 中间产物清出 release/：CI 按 release/ 目录整体归档制品，staging 残留会把制品从几 MB 膨胀到几十 MB
+rm -rf "$STAGE"
 echo "== 完成: release/apphub-release-$VERSION.tar.gz =="

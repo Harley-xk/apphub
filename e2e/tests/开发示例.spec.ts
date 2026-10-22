@@ -1,7 +1,8 @@
-// 全链路用例：批次六样板业务模块——开发示例分组、商品列表字典翻译（DictTag 分类 / 状态复用）、
-// 新增 / 编辑 / 删除闭环、搜索过滤与 keep-alive 载体。依赖后端与 PostgreSQL 就绪（种子账号
-// admin/admin123）；探测失败时整组自动跳过。写操作用例为「新建 → 验证 → 删除」闭环且名称带随机后缀，
-// 不污染种子数据。选择器约定同系统管理：表格行用 .vxe-body--row（列表表格统一 ApphubTable / vxe-table）；
+// 全链路用例：批次六样板业务模块——商品列表字典翻译（DictTag 分类 / 状态复用）、
+// 新增 / 编辑 / 删除闭环、搜索过滤与 keep-alive 载体（开发示例菜单已 hidden，页面经直链 /demo/product 访问）。
+// 依赖后端与 PostgreSQL 就绪（种子账号 admin/admin123）；探测失败时整组自动跳过。
+// 写操作用例为「新建 → 验证 → 删除」闭环且名称带随机后缀，不污染种子数据。
+// 选择器约定同系统管理：表格行用 .vxe-body--row（列表表格统一 ApphubTable / vxe-table）；
 // el-select 非过滤态走表单项容器定位；行断言用 filter hasText，命中多行时取 first()
 import { expect, test } from '@playwright/test'
 
@@ -19,13 +20,6 @@ test.beforeEach(async ({ page, request }) => {
 })
 
 test.describe('开发示例', () => {
-  test('侧栏开发示例分组展开商品管理子项', async ({ page }) => {
-    await page.goto('/')
-
-    await page.getByRole('menuitem', { name: '开发示例' }).click()
-    await expect(page.getByRole('menuitem', { name: '商品管理' })).toBeVisible()
-  })
-
   test('商品列表：种子数据经字典翻译与金额格式化渲染', async ({ page }) => {
     await page.goto('/demo/product')
 

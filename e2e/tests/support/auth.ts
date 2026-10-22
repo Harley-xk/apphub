@@ -16,8 +16,8 @@ export async function mockAuthState(page: Page): Promise<void> {
         data: {
           user: { id: 'u-e2e', username: 'mock', nickname: '模拟用户' },
           roles: ['operator'],
-          // 商品页挂 meta.permission，须授查询权否则「开发示例」分组被菜单过滤
-          permissions: ['demo:product:query'],
+          // 页面挂 meta.permission 的直链 / 菜单入口须授查询权：商品页（demo，直链验证载体）与应用管理页（菜单导航用例）
+          permissions: ['demo:product:query', 'appcenter:app:query'],
         },
       }),
     })

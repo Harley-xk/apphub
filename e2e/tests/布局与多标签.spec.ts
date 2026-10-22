@@ -5,11 +5,12 @@ import { expect, test } from '@playwright/test'
 import { mockAuthState } from './support/auth'
 
 /**
- * 商品页数据接口 mock：本组为纯前端链路，避免页面请求带假 token 打到真实后端被 401 整页接管。
- * 注意用函数谓词而非 glob 匹配——分页请求携带 pageNo / pageSize 等 query，glob 不匹配带 query 的 URL，
- * 一旦漏 mock 命中真后端，401 会触发 http 层整页跳登录（假 token 又被守卫弹回首页，症状极具迷惑性）
+ * 用例涉及页面的数据接口 mock（商品页 / 应用管理页）：本组为纯前端链路，避免页面请求带假 token 打到
+ * 真实后端被 401 整页接管。注意用函数谓词而非 glob 匹配——分页请求携带 pageNo / pageSize 等 query，
+ * glob 不匹配带 query 的 URL，一旦漏 mock 命中真后端，401 会触发 http 层整页跳登录
+ * （假 token 又被守卫弹回首页，症状极具迷惑性）
  */
-async function mockProductApi(page: import('@playwright/test').Page): Promise<void> {
+async function mockPageApi(page: import('@playwright/test').Page): Promise<void> {
   await page.route(
     url => url.pathname === '/api/system/dict/list-all-simple',
     route => route.fulfill({
@@ -26,11 +27,19 @@ async function mockProductApi(page: import('@playwright/test').Page): Promise<vo
       body: JSON.stringify({ code: 0, data: { list: [], total: 0 } }),
     }),
   )
+  await page.route(
+    url => url.pathname === '/api/appcenter/app',
+    route => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ code: 0, data: { list: [], total: 0 } }),
+    }),
+  )
 }
 
 test.beforeEach(async ({ page }) => {
   await mockAuthState(page)
-  await mockProductApi(page)
+  await mockPageApi(page)
 })
 
 /** 页签元素定位（fullPath 为 data-fullpath 属性） */
@@ -62,16 +71,16 @@ test.describe('布局门面', () => {
   test('菜单导航落签，关闭页签回到相邻签', async ({ page }) => {
     await page.goto('/')
 
-    // 展开开发示例目录并进入商品管理
-    await page.getByRole('menuitem', { name: '开发示例' }).click()
-    await page.getByRole('menuitem', { name: '商品管理' }).click()
+    // 展开应用中心目录并进入应用管理
+    await page.getByRole('menuitem', { name: '应用中心' }).click()
+    await page.getByRole('menuitem', { name: '应用管理' }).click()
     await expect(page.getByPlaceholder('名称模糊匹配')).toBeVisible()
-    await expect(tagOf(page, '/demo/product')).toBeVisible()
+    await expect(tagOf(page, '/appcenter/app')).toBeVisible()
 
     // 关闭当前签：回到左邻（首页固定签）
-    await tagOf(page, '/demo/product').hover()
-    await tagOf(page, '/demo/product').locator('.apphub-tag-close').click()
-    await expect(tagOf(page, '/demo/product')).toHaveCount(0)
+    await tagOf(page, '/appcenter/app').hover()
+    await tagOf(page, '/appcenter/app').locator('.apphub-tag-close').click()
+    await expect(tagOf(page, '/appcenter/app')).toHaveCount(0)
     await expect(page.getByRole('heading', { name: '应用管理平台' })).toBeVisible()
   })
 })
@@ -96,10 +105,10 @@ test.describe('多标签操作', () => {
   })
 
   test('刷新页签强制重建实例（keep-alive 缓存排除）', async ({ page }) => {
-    await page.goto('/')
+    // 商品页菜单已 hidden，直链进入（页面仍承担 keep-alive / 刷新重建的验证载体）
+    await page.goto('/demo/product')
+    await expect(tagOf(page, '/demo/product')).toBeVisible()
 
-    await page.getByRole('menuitem', { name: '开发示例' }).click()
-    await page.getByRole('menuitem', { name: '商品管理' }).click()
     // 搜索关键字即页面状态：切走切回应保留（keep-alive 缓存生效）
     const keyword = page.getByPlaceholder('名称模糊匹配')
     await keyword.fill('蓝牙')

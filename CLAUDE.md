@@ -23,7 +23,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **关键约定**：种子账号 admin / admin123（初始口令经参数 `system.user.init-password` → env → admin123 三级兜底）；**迁移为唯一建表通道**（本地 `.env` 的 `DB_SYNC` 已关，生产强制关闭并告警）；前端端口 **5180**（`strictPort`，避开 Vite 默认 5173 的本机多项目冲突）；`@nestjs/jwt` 锁 **11.x**（12 为 ESM-only，Jest CJS 不兼容）；member JWT 密钥经 `MEMBER_JWT_SECRET` 配置（生产启动 fail-fast 校验非默认值）；短信 / 邮件通道经 `SMS_*` / `MAIL_*` 配置（生产缺配置启动 fail-fast，非生产降级 log 通道）；在线支付渠道经 `WECHAT_PAY_*` / `ALIPAY_*` 配置（PEM 一律文件路径；生产两渠道全未配或部分填写启动 fail-fast，非生产降级 Mock 渠道）。
 
-**验证基线**：`pnpm check` 全绿（server 单测 482 + e2e 119、web 单测 100）、浏览器 e2e 31 用例（首页 / 登录链路 / 布局与多标签 / 系统管理 / 开发示例 / 后端连通性 / 应用中心 / 会员中心 / 订阅管理）。
+**验证基线**：`pnpm check` 全绿（server 单测 482 + e2e 119、web 单测 100）、浏览器 e2e 30 用例（首页 / 登录链路 / 布局与多标签 / 系统管理 / 开发示例 / 后端连通性 / 应用中心 / 会员中心 / 订阅管理）。
 
 ## 语言约定
 

@@ -1,4 +1,4 @@
-# n-1 服务器全局 nginx 站点配置示例（HTTPS 版，ACME 证书）
+# apphub 服务器全局 nginx 站点配置示例（HTTPS 版，ACME 证书）
 # 拷入 /etc/nginx/conf.d/apphub.conf（或 sites-enabled/ 后按发行版习惯软链），
 # 改 server_name 与证书路径后 nginx -t && nginx -s reload
 #

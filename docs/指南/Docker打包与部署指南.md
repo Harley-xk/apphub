@@ -1,6 +1,6 @@
 # Docker 打包与部署指南
 
-n-1 提供两种可选部署方案：[发布包直部署](发布包打包与部署指南.md)与 **Docker 镜像部署**（本指南），两者平级、按目标环境选型（选型对比见[发布包打包与部署指南 §1](发布包打包与部署指南.md#1-方案选型)）。本指南是 docker 打包编译工具链与服务器部署的唯一设计依据：镜像结构、构建流程、流水线接入、服务器初始化与日常发布 / 回滚操作均以本文为准。
+apphub 提供两种可选部署方案：[发布包直部署](发布包打包与部署指南.md)（**主方案**）与 **Docker 镜像部署**（本指南，备选），选型对比与当前结论见[发布包打包与部署指南 §1](发布包打包与部署指南.md#1-方案选型)。本指南是 docker 打包编译工具链与服务器部署的唯一设计依据：镜像结构、构建流程、流水线接入、服务器初始化与日常发布 / 回滚操作均以本文为准。
 
 ## 1. 部署形态与网络拓扑
 
@@ -71,7 +71,7 @@ nginx -t && nginx -s reload
 docker compose -f /opt/apphub/docker-compose.yml up -d
 ```
 
-`/opt/apphub/pay-certs/`：支付商户 PEM 证书目录（M5 渠道资质就绪后放微信 `apiclient_key.pem`、支付宝应用私钥 / 公钥），compose 已挂载到容器 `/pay-certs`，`server.env` 中 `*_PRIVATE_KEY_PATH` / `*_PUBLIC_KEY_PATH` 填容器内路径。
+`/opt/apphub/pay-certs/`：支付商户 PEM 证书目录（M5 渠道资质就绪后放微信 `apiclient_key.pem`、支付宝应用私钥 / 公钥），compose 已挂载为容器内同路径，`server.env` 中 `*_PRIVATE_KEY_PATH` / `*_PUBLIC_KEY_PATH` 直接填服务器路径（与主方案发布包直部署共用，见[发布包打包与部署指南 §8](发布包打包与部署指南.md#8-配置参考serverenv)）。
 
 `server.env` 必改项见 [§7 配置参考](#7-配置参考serverenv)；占位密钥未改时应用会启动失败（fail-fast 校验），属预期防护。
 
@@ -82,7 +82,7 @@ docker compose -f /opt/apphub/docker-compose.yml up -d
 ```mermaid
 flowchart LR
     Repo["代码仓库<br/>push 触发"] --> Build["构建阶段<br/>需 docker CLI 与 daemon"]
-    Build -->|"docker build + docker save"| Artifact["产物归档<br/>n1-image.tar.gz + deploy/ 目录"]
+    Build -->|"docker build + docker save"| Artifact["产物归档<br/>apphub-image.tar.gz + deploy/ 目录"]
     Artifact -->|"CI 产物库 / scp / rsync"| Deploy["目标服务器<br/>产物目录执行部署脚本"]
     Deploy -->|"sh deploy/deploy.sh"| Done["load 镜像 → compose up -d → 清理悬空层"]
 ```
@@ -150,7 +150,7 @@ sh deploy/deploy.sh
 | `STS_ROLE_ARN` | △ | STS 直传凭证签发的 RAM 角色（策略仅授 `packages/*` PutObject）；缺失时仅上传凭证接口拒绝 |
 | `SMS_SIGN_NAME` / `SMS_TEMPLATE_CODE` | △ | 阿里云短信验证码通道（AK 经 `ALI_ACCESS_KEY_*`）；生产缺配启动失败（`ALLOW_CHANNEL_FALLBACK=true` 时降级 log 通道）；当前模板 `SMS_512656603`（签名「张家港智汇冰芯」） |
 | `MAIL_HOST` / `MAIL_PORT` / `MAIL_USER` / `MAIL_PASS` / `MAIL_FROM` | △ | SMTP 邮件验证码通道；fail-fast 与降级规则同短信 |
-| `WECHAT_PAY_APP_ID` / `WECHAT_PAY_MCH_ID` / `WECHAT_PAY_CERT_SERIAL` / `WECHAT_PAY_PRIVATE_KEY_PATH` / `WECHAT_PAY_APIV3_KEY` | △ | 微信 Native 渠道（五项齐备启用该渠道）；PEM 放 `/opt/apphub/pay-certs/`，路径填容器内 `/pay-certs/<文件名>` |
+| `WECHAT_PAY_APP_ID` / `WECHAT_PAY_MCH_ID` / `WECHAT_PAY_CERT_SERIAL` / `WECHAT_PAY_PRIVATE_KEY_PATH` / `WECHAT_PAY_APIV3_KEY` | △ | 微信 Native 渠道（五项齐备启用该渠道）；PEM 放 `/opt/apphub/pay-certs/`，路径直接填服务器路径（compose 挂载为容器内同路径） |
 | `WECHAT_PAY_PUBLIC_KEY_SERIAL` / `WECHAT_PAY_PUBLIC_KEY_PATH` | — | 微信公钥模式（2024 后新商户）；不配则平台证书模式自动拉取 |
 | `ALIPAY_APP_ID` / `ALIPAY_PRIVATE_KEY_PATH` / `ALIPAY_PUBLIC_KEY_PATH` | △ | 支付宝当面付渠道（三项齐备启用）；PEM 路径规则同上 |
 | `ALIPAY_GATEWAY` | — | 默认正式网关，沙箱联调改沙箱网关 |

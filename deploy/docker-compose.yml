@@ -12,9 +12,9 @@ services:
       # 外置运行配置（DB / JWT / 签名密钥等），修改后重建容器生效
       - ./server.env
     volumes:
-      # 支付商户 PEM 证书（M5 渠道资质就绪后启用）：宿主机 /opt/apphub/pay-certs → 容器 /pay-certs，
-      # server.env 的 *_PRIVATE_KEY_PATH / *_PUBLIC_KEY_PATH 填容器内路径 /pay-certs/<文件名>
-      - ./pay-certs:/pay-certs
+      # 支付商户 PEM 证书（M5 渠道资质就绪后启用）：挂载为容器内同路径，
+      # server.env 的 *_PRIVATE_KEY_PATH / *_PUBLIC_KEY_PATH 与主方案（发布包直部署）共用服务器路径
+      - ./pay-certs:/opt/apphub/pay-certs
     extra_hosts:
       # 数据库与本机同机时，DB_HOST 可填 host.docker.internal
       - "host.docker.internal:host-gateway"

@@ -1,5 +1,5 @@
-# apphub 单镜像运行编排（放服务器 /opt/apphub/，与 server.env 同目录）
-# 镜像由云效主机部署经 deploy.sh 加载（apphub:latest），首次初始化见 docs/指南/Docker打包与部署指南.md
+# apphub 单镜像运行编排（Docker 备选方案，放服务器 /opt/apphub/，与 server.env 同目录）
+# 镜像由部署脚本 deploy.sh 加载（apphub:latest），首次初始化见 docs/指南/Docker打包与部署指南.md
 services:
   apphub:
     image: apphub:latest

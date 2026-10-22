@@ -160,9 +160,10 @@ describe('Signature (e2e)', () => {
   })
 
   it('未来方向超出时间窗的时间戳应返回 401（守护双向时间窗）', () => {
-    // 偏移 100ms 余量：抵消请求构建与处理延迟对「未来方向窗口差值」的侵蚀
+    // 偏移 5s 余量：抵消请求构建与处理延迟对「未来方向窗口差值」的侵蚀
+    // （全量并发下用例耗时可达百毫秒级，余量须覆盖之又不至于让校验侧等待超时）
     return signedRequest(server, 'post', '/api/signature-demo/standard', '{"name":"CNY"}', {
-      timestamp: String(Date.now() + 300_100),
+      timestamp: String(Date.now() + 305_000),
     }).expect(401)
   })
 

@@ -5,8 +5,13 @@
 set -e
 cd "$(dirname "$0")/.."
 
-# CI 环境无 pnpm 时自动安装（版本与开发环境对齐，pnpm 11 的 lockfile 须同代 pnpm 消费）
-command -v pnpm >/dev/null 2>&1 || npm install -g pnpm@11.6.0
+# CI 环境无 pnpm 或预装旧版时自动升级（云效等预装 pnpm 读不了 11 的 lockfile，
+# 报 Ignoring not compatible lockfile；pnpm 11 的 lockfile 须同代 pnpm 消费）
+PNPM_MAJOR=$(pnpm --version 2>/dev/null | cut -d. -f1)
+if [ -z "$PNPM_MAJOR" ] || [ "$PNPM_MAJOR" -lt 11 ]; then
+  npm install -g pnpm@11.6.0
+  hash -r 2>/dev/null || true
+fi
 
 echo "== 1/5 安装依赖 =="
 pnpm install --frozen-lockfile
@@ -39,4 +44,6 @@ printf 'version=%s\ncommit=%s\ntime=%s\n' "$VERSION" "$COMMIT" "$(date '+%F %T')
 tar -czf "release/apphub-release-$VERSION.tar.gz" -C "$STAGE" server web-dist release-info
 # 部署脚本随产物上传（产物自包含，部署阶段执行 sh release.sh 即可）
 cp deploy/release.sh release/
+# 中间产物清出 release/：CI 按 release/ 目录整体归档制品，staging 残留会把制品从几 MB 膨胀到几十 MB
+rm -rf "$STAGE"
 echo "== 完成: release/apphub-release-$VERSION.tar.gz =="

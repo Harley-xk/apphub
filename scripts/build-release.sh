@@ -5,8 +5,13 @@
 set -e
 cd "$(dirname "$0")/.."
 
-# CI 环境无 pnpm 时自动安装（版本与开发环境对齐，pnpm 11 的 lockfile 须同代 pnpm 消费）
-command -v pnpm >/dev/null 2>&1 || npm install -g pnpm@11.6.0
+# CI 环境无 pnpm 或预装旧版时自动升级（云效等预装 pnpm 读不了 11 的 lockfile，
+# 报 Ignoring not compatible lockfile；pnpm 11 的 lockfile 须同代 pnpm 消费）
+PNPM_MAJOR=$(pnpm --version 2>/dev/null | cut -d. -f1)
+if [ -z "$PNPM_MAJOR" ] || [ "$PNPM_MAJOR" -lt 11 ]; then
+  npm install -g pnpm@11.6.0
+  hash -r 2>/dev/null || true
+fi
 
 echo "== 1/5 安装依赖 =="
 pnpm install --frozen-lockfile

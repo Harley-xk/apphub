@@ -63,7 +63,7 @@ skills/apphub-release/
 
 ```jsonc
 {
-  "baseUrl": "https://api.example.com",   // 平台基址（不带 /api 前缀）
+  "baseUrl": "https://appcenter.witice.top",  // 平台基址（本仓库线上环境，不带 /api 前缀）
   "appKey": "ah_xxxxxxxxxxxxxxxx",        // 应用标识（向平台方索取）
   "channel": "stable",                    // 默认发版通道
   "buildCommand": "pnpm electron-builder --win --x64",  // 可选：自定义构建命令（内置框架项目可不配）

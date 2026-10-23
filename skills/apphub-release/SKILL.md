@@ -14,7 +14,7 @@ description: 应用发版助手：向 apphub 应用管理平台发布新版本�
 ## 0. 首次接入（项目内无 `.apphub-release.json` 时）
 
 1. 向用户收集四项信息：
-   - **平台基址** `baseUrl`（形如 `https://api.example.com`，不带 `/api` 后缀）
+   - **平台基址** `baseUrl`（apphub 线上环境为 `https://appcenter.witice.top`，不带 `/api` 后缀；私有化部署填平台方提供的地址）
    - **发版账号**（平台方发放，用户名 + 密码；平台开启签名时另有签名密钥）
    - **appKey**（32 位，`ah_` 开头，向平台方索取）
    - **目标通道** code（默认 `stable`）
@@ -22,7 +22,7 @@ description: 应用发版助手：向 apphub 应用管理平台发布新版本�
 
    ```jsonc
    {
-     "baseUrl": "https://api.example.com",
+     "baseUrl": "https://appcenter.witice.top",
      "appKey": "ah_xxxxxxxxxxxxxxxx",
      "channel": "stable",
      "buildCommand": "pnpm electron-builder --win --x64",  // 可选，自定义构建命令

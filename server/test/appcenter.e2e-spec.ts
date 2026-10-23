@@ -20,6 +20,7 @@ import { LoginLogEntity } from '../src/modules/system/entities/login-log.entity'
 import { OperateLogEntity } from '../src/modules/system/entities/operate-log.entity'
 import { RolePermissionEntity } from '../src/modules/system/entities/role-permission.entity'
 import { RoleEntity } from '../src/modules/system/entities/role.entity'
+import { UserAppScopeEntity } from '../src/modules/system/entities/user-app-scope.entity'
 import { UserRoleEntity } from '../src/modules/system/entities/user-role.entity'
 import { UserEntity } from '../src/modules/system/entities/user.entity'
 
@@ -33,17 +34,35 @@ const PASSWORD_HASH = '$2a$10$8yeFDSyUDUfl4SwuLGEah.XGaPS4uQLJb53EwXiCqXjUyxFKFA
 const ADMIN_ID = '00000000-0000-4000-8000-000000000001'
 const SUPER_ADMIN_ROLE_ID = '00000000-0000-4000-8000-000000000002'
 const PLAIN_USER_ID = '00000000-0000-4000-8000-000000000003'
+// 应用管理员（数据范围 = 按应用）：账户级授权在用例中绑定到台账应用
+const APP_ADMIN_ROLE_ID = '00000000-0000-4000-8000-000000000004'
+const APP_ADMIN_USER_ID = '00000000-0000-4000-8000-000000000005'
 
 // ===== 内存数据 =====
 
 const users: Partial<UserEntity>[] = [
   { id: ADMIN_ID, username: 'admin', nickname: '系统管理员', password: PASSWORD_HASH, status: true },
   { id: PLAIN_USER_ID, username: 'nobody', nickname: '无权限用户', password: PASSWORD_HASH, status: true },
+  { id: APP_ADMIN_USER_ID, username: 'appadmin', nickname: '应用管理员', password: PASSWORD_HASH, status: true },
 ]
 const roles: Partial<RoleEntity>[] = [
-  { id: SUPER_ADMIN_ROLE_ID, code: 'super_admin', name: '超级管理员', status: true },
+  { id: SUPER_ADMIN_ROLE_ID, code: 'super_admin', name: '超级管理员', status: true, dataScope: 'all' },
+  { id: APP_ADMIN_ROLE_ID, code: 'app_admin', name: '应用管理员', status: true, dataScope: 'app' },
 ]
-const userRoles: Partial<UserRoleEntity>[] = [{ userId: ADMIN_ID, roleId: SUPER_ADMIN_ROLE_ID }]
+const userRoles: Partial<UserRoleEntity>[] = [
+  { userId: ADMIN_ID, roleId: SUPER_ADMIN_ROLE_ID },
+  { userId: APP_ADMIN_USER_ID, roleId: APP_ADMIN_ROLE_ID },
+]
+/** app_admin 角色的权限行（数据范围判定只看「授予该域权限的角色」——A4） */
+const rolePermissions: Partial<RolePermissionEntity>[] = [
+  { roleId: APP_ADMIN_ROLE_ID, permission: 'appcenter:app:query' },
+  { roleId: APP_ADMIN_ROLE_ID, permission: 'appcenter:app:update' },
+  { roleId: APP_ADMIN_ROLE_ID, permission: 'appcenter:channel:query' },
+  { roleId: APP_ADMIN_ROLE_ID, permission: 'appcenter:version:query' },
+  { roleId: APP_ADMIN_ROLE_ID, permission: 'appcenter:version:create' },
+]
+/** 账户级应用授权行（物理删除的纯关联值对象） */
+const userAppScopes: Partial<UserAppScopeEntity>[] = []
 const operateLogs: Partial<OperateLogEntity>[] = []
 
 const apps: Partial<AppEntity>[] = []
@@ -153,6 +172,7 @@ describe('AppcenterModule (e2e)', () => {
   let server: Server
   let adminToken: string
   let plainToken: string
+  let appAdminToken: string
   let appId: string
   let appKey: string
   let versionId: string
@@ -175,8 +195,16 @@ describe('AppcenterModule (e2e)', () => {
       })
       .overrideProvider(getRepositoryToken(RoleEntity))
       .useValue({
-        find: (criteria: { where?: { status?: boolean } }) =>
-          Promise.resolve(roles.filter(role => role.status === criteria.where?.status)),
+        find: (criteria: { where?: { status?: boolean, id?: { value?: string[] } } }) => {
+          const where = criteria.where ?? {}
+          const roleIds = where.id?.value
+          return Promise.resolve(
+            roles.filter(role =>
+              (where.status === undefined || role.status === where.status)
+              && (roleIds === undefined || roleIds.includes(role.id!)),
+            ),
+          )
+        },
       })
       .overrideProvider(getRepositoryToken(UserRoleEntity))
       .useValue({
@@ -184,7 +212,38 @@ describe('AppcenterModule (e2e)', () => {
           Promise.resolve(userRoles.filter(relation => relation.userId === criteria.where.userId)),
       })
       .overrideProvider(getRepositoryToken(RolePermissionEntity))
-      .useValue({ find: () => Promise.resolve([]) })
+      .useValue({
+        // AppScopeService 的域授予查询：roleId 为 In、permission 为 Like('domain:%')
+        find: (criteria: { where?: { roleId?: { value?: string[] }, permission?: { value?: string } } }) => {
+          const where = criteria.where ?? {}
+          const roleIds = where.roleId?.value
+          const prefix = (where.permission?.value ?? '').replace('%', '')
+          return Promise.resolve(
+            rolePermissions.filter(relation =>
+              (roleIds === undefined || roleIds.includes(relation.roleId!))
+              && (prefix === '' || (relation.permission ?? '').startsWith(prefix)),
+            ),
+          )
+        },
+      })
+      .overrideProvider(getRepositoryToken(UserAppScopeEntity))
+      .useValue({
+        find: (criteria: { where: { userId: string } }) =>
+          Promise.resolve(userAppScopes.filter(row => row.userId === criteria.where.userId)),
+        delete: (criteria: { userId: string, appId?: { value?: string[] } }) => {
+          const appIds = criteria.appId?.value
+          for (let index = userAppScopes.length - 1; index >= 0; index--) {
+            const row = userAppScopes[index]
+            if (row.userId === criteria.userId && (appIds === undefined || appIds.includes(row.appId!)))
+              userAppScopes.splice(index, 1)
+          }
+          return Promise.resolve({})
+        },
+        insert: (rows: Partial<UserAppScopeEntity>[]) => {
+          userAppScopes.push(...rows)
+          return Promise.resolve({})
+        },
+      })
       .overrideProvider(getRepositoryToken(AppEntity))
       .useValue(appRepoWithManager)
       .overrideProvider(getRepositoryToken(AppChannelEntity))
@@ -219,6 +278,7 @@ describe('AppcenterModule (e2e)', () => {
     }
     adminToken = await login('admin')
     plainToken = await login('nobody')
+    appAdminToken = await login('appadmin')
   })
 
   afterAll(async () => {
@@ -252,6 +312,100 @@ describe('AppcenterModule (e2e)', () => {
       .expect(200)
     const channelsOfApp = (channelList.body as ApiResponse<{ code: string }[]>).data!
     expect(channelsOfApp.map(channel => channel.code)).toContain('stable')
+  })
+
+  it('应用授权接口：差集写入并回显，未登记应用拒绝（003001001）', async () => {
+    await request(server)
+      .put(`/api/system/user/${APP_ADMIN_USER_ID}/app-scope`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ appIds: [appId] })
+      .expect(200)
+
+    const res = await request(server)
+      .get(`/api/system/user/${APP_ADMIN_USER_ID}/app-scope`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(200)
+    const scope = (res.body as ApiResponse<{ appIds: string[], apps: { id: string }[] }>).data!
+    expect(scope.appIds).toEqual([appId])
+    expect(scope.apps[0]).toMatchObject({ id: appId })
+
+    // 无效 appId 拒绝（应用不存在，APP_NOT_EXISTS）
+    await request(server)
+      .put(`/api/system/user/${APP_ADMIN_USER_ID}/app-scope`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ appIds: ['00000000-0000-4000-8000-0000000000ff'] })
+      .expect(400)
+      .expect((res) => {
+        expect((res.body as ApiResponse<unknown>).code).toBe(300100001)
+      })
+  })
+
+  it('app_admin 应用列表只含授权应用，直连未授权应用 / 通道 / 版本应 403 专用码', async () => {
+    // 另建一个应用（仅 admin 可见），app_admin 未被授权
+    const created = await request(server)
+      .post('/api/appcenter/app')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: '未授权应用', appType: ['desktop'], clientType: 'public' })
+      .expect(200)
+    const otherAppId = (created.body as ApiResponse<{ id: string }>).data!.id
+
+    // 列表收窄：只剩授权应用
+    const page = await request(server)
+      .get('/api/appcenter/app')
+      .set('Authorization', `Bearer ${appAdminToken}`)
+      .expect(200)
+    const body = page.body as ApiResponse<PageResult<{ id: string }>>
+    expect(body.data?.list.map(app => app.id)).toEqual([appId])
+    expect(body.data?.total).toBe(1)
+
+    // 应用下拉同源收窄（授权弹窗 / 订阅页筛选数据源）
+    const options = await request(server)
+      .get('/api/appcenter/app/options')
+      .set('Authorization', `Bearer ${appAdminToken}`)
+      .expect(200)
+    expect((options.body as ApiResponse<{ id: string }[]>).data?.map(app => app.id)).toEqual([appId])
+
+    // 单资源越权：详情 / 通道 / 版本一律 403 + 专用码
+    const forbidden = (res: { body: unknown }) => {
+      expect((res.body as ApiResponse<unknown>).code).toBe(300100005)
+    }
+    await request(server)
+      .get(`/api/appcenter/app/${otherAppId}`)
+      .set('Authorization', `Bearer ${appAdminToken}`)
+      .expect(403)
+      .expect(forbidden)
+    await request(server)
+      .get(`/api/appcenter/app/${otherAppId}/channel`)
+      .set('Authorization', `Bearer ${appAdminToken}`)
+      .expect(403)
+      .expect(forbidden)
+    await request(server)
+      .post(`/api/appcenter/app/${otherAppId}/version`)
+      .set('Authorization', `Bearer ${appAdminToken}`)
+      .send({ channelId: '00000000-0000-4000-8000-0000000000aa', version: '9.9.9', title: '越权建版本' })
+      .expect(403)
+      .expect(forbidden)
+
+    // 授权应用可正常读取
+    await request(server)
+      .get(`/api/appcenter/app/${appId}`)
+      .set('Authorization', `Bearer ${appAdminToken}`)
+      .expect(200)
+  })
+
+  it('停用角色后权限与数据范围即时失效（逐请求现查库，A12）', async () => {
+    const appAdminRole = roles.find(role => role.id === APP_ADMIN_ROLE_ID)!
+    appAdminRole.status = false
+    try {
+      // 同一 token 无需重登：Guard 与范围判定均逐请求查库
+      await request(server)
+        .get('/api/appcenter/app')
+        .set('Authorization', `Bearer ${appAdminToken}`)
+        .expect(403)
+    }
+    finally {
+      appAdminRole.status = true
+    }
   })
 
   it('通道闭环：创建 beta、code 查重拒绝、stable 不可删', async () => {

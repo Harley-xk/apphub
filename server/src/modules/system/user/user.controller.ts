@@ -14,13 +14,14 @@ import { RequirePermissions } from '../permissions'
 // 注意：作为 @Query()/@Body() 元类型的 DTO 类必须值导入（import type 会在运行时擦除，
 // design:paramtypes 退化为 Object，ValidationPipe 的 whitelist 将拒绝全部字段）
 import {
+  UserAssignAppScopeDto,
   UserAssignRoleDto,
   UserCreateDto,
   UserPageDto,
   UserResetPasswordDto,
   UserUpdateDto,
 } from './dto/user.dto'
-import type { UserVo } from './dto/user.dto'
+import type { UserAppScopeVo, UserVo } from './dto/user.dto'
 import { UserService } from './user.service'
 
 @ApiTags('系统用户')
@@ -80,5 +81,23 @@ export class UserController {
   @Get(':id/role-ids')
   async getRoleIds(@Param('id') id: string): Promise<string[]> {
     return this.userService.getRoleIds(id)
+  }
+
+  @ApiOperation({ summary: '查询用户应用授权（回显未软删应用）' })
+  @RequirePermissions(SYSTEM_PERMISSION_CODES.USER_ASSIGN_APP_SCOPE)
+  @Get(':id/app-scope')
+  async getAppScope(@Param('id') id: string): Promise<UserAppScopeVo> {
+    return this.userService.getAppScope(id)
+  }
+
+  @ApiOperation({ summary: '分配应用授权（差集增量绑定，仅对 app 范围角色生效）' })
+  @OperateLog('用户管理', '分配应用授权')
+  @RequirePermissions(SYSTEM_PERMISSION_CODES.USER_ASSIGN_APP_SCOPE)
+  @Put(':id/app-scope')
+  async assignAppScope(
+    @Param('id') id: string,
+    @Body() dto: UserAssignAppScopeDto,
+  ): Promise<void> {
+    await this.userService.assignAppScope(id, dto.appIds)
   }
 }

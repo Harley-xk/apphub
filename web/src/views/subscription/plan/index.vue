@@ -125,7 +125,7 @@
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { onMounted, reactive, ref } from 'vue'
 
-import { getAppPage } from '@/api/appcenter/app'
+import { getAppOptions } from '@/api/appcenter/app'
 import type { PlanVO } from '@/api/subscription/plan'
 import { deletePlan, getPlanPage, periodTypeText, updatePlan } from '@/api/subscription/plan'
 import ApphubTable from '@/components/ApphubTable/index.vue'
@@ -170,9 +170,10 @@ onMounted(() => {
   loadTable()
 })
 
+/** 应用下拉改用精简选项接口：后端按 appcenter 域数据范围收窄，天然只含授权应用 */
 async function loadApps(): Promise<void> {
-  const page = await getAppPage({ pageNo: 1, pageSize: 100 })
-  appOptions.value = page.list.map(app => ({ id: app.id, name: app.name }))
+  const options = await getAppOptions()
+  appOptions.value = options.map(app => ({ id: app.id, name: app.name }))
 }
 
 async function loadTable(): Promise<void> {

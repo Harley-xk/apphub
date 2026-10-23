@@ -112,6 +112,14 @@ const makeService = (fixtures: {
     return Promise.resolve('applied' as const)
   })
   const renewService = { renewInTx } as unknown as SubscriptionRenewService
+  // 订阅域数据范围桩：默认 ALL；下单 / 关单用例验证委托调用
+  const assertAppAllowed = jest.fn(() => Promise.resolve())
+  const assertListAppId = jest.fn()
+  const appScopeService = {
+    getListAppIds: () => Promise.resolve(null),
+    assertListAppId,
+    assertAppAllowed,
+  }
   const service = new OrderService(
     dataSource as never,
     orderRepo as never,
@@ -122,6 +130,7 @@ const makeService = (fixtures: {
     renewService,
     providerRegistry,
     queryThrottle as unknown as PayQueryThrottleService,
+    appScopeService as never,
   )
   return {
     service,
@@ -133,8 +142,12 @@ const makeService = (fixtures: {
     provider,
     queryThrottle,
     renewInTx,
+    assertAppAllowed,
   }
 }
+
+/** 管理端调用者 id（数据范围判定入参） */
+const USER_ID = 'u-1'
 
 /** 开放下单用会员身份（令牌绑定应用 appKey=a_key_1） */
 const MEMBER = { id: 'm1', appKey: 'a_key_1' }
@@ -143,21 +156,21 @@ describe('线下收款备案（createOfflineOrder）', () => {
   it('计划不存在应拒绝（005001001）', async () => {
     const { service } = makeService({ plan: null, member: { id: 'm1' } })
     await expect(
-      service.createOfflineOrder({ memberId: 'm1', planId: 'p1', amount: 99000 }),
+      service.createOfflineOrder({ memberId: 'm1', planId: 'p1', amount: 99000 }, USER_ID),
     ).rejects.toMatchObject({ code: 500100001 })
   })
 
   it('计划已下架应拒绝（005001002）——存量订阅不受影响，但不可新购', async () => {
     const { service } = makeService({ plan: makePlan({ status: 'off' }), member: { id: 'm1' } })
     await expect(
-      service.createOfflineOrder({ memberId: 'm1', planId: 'p1', amount: 99000 }),
+      service.createOfflineOrder({ memberId: 'm1', planId: 'p1', amount: 99000 }, USER_ID),
     ).rejects.toMatchObject({ code: 500100002 })
   })
 
   it('会员不存在应拒绝（member 域错误码）', async () => {
     const { service } = makeService({ plan: makePlan(), member: null })
     await expect(
-      service.createOfflineOrder({ memberId: 'm1', planId: 'p1', amount: 99000 }),
+      service.createOfflineOrder({ memberId: 'm1', planId: 'p1', amount: 99000 }, USER_ID),
     ).rejects.toMatchObject({ code: 400100001 })
   })
 
@@ -165,7 +178,7 @@ describe('线下收款备案（createOfflineOrder）', () => {
     const subscription = { memberId: 'm1', appId: 'a1', expireAt: new Date(PERMANENT_EXPIRE_AT) } as SubscriptionEntity
     const { service, orderRepo } = makeService({ plan: makePlan(), member: { id: 'm1' }, subscription })
     await expect(
-      service.createOfflineOrder({ memberId: 'm1', planId: 'p1', amount: 99000 }),
+      service.createOfflineOrder({ memberId: 'm1', planId: 'p1', amount: 99000 }, USER_ID),
     ).rejects.toMatchObject({ code: 500300002 })
     expect(orderRepo.update).not.toHaveBeenCalled()
   })
@@ -177,7 +190,7 @@ describe('线下收款备案（createOfflineOrder）', () => {
       member: { id: 'm1' },
       subscription,
     })
-    await service.createOfflineOrder({ memberId: 'm1', planId: 'p1', amount: 199000 })
+    await service.createOfflineOrder({ memberId: 'm1', planId: 'p1', amount: 199000 }, USER_ID)
     expect(renewInTx).toHaveBeenCalledTimes(1)
   })
 
@@ -189,7 +202,7 @@ describe('线下收款备案（createOfflineOrder）', () => {
       amount: 88000,
       transactionId: 'FLOW-001',
       offlineNote: '银行转账',
-    })
+    }, USER_ID)
     expect(vo.status).toBe('paid')
     expect(vo.paidAt).toBeInstanceOf(Date)
     expect(insert).toHaveBeenCalledTimes(1)
@@ -390,7 +403,7 @@ describe('markPaid 状态机（回调 / 兜底查单共用幂等入口）', () =
 describe('关单防护（closeOrder / closeExpiredPending，附录 §6 / PY4）', () => {
   it('手动关闭非 pending 订单应拒绝（005002002）', async () => {
     const { service } = makeService({ order: makeOrder({ status: 'paid' }) })
-    await expect(service.closeOrder('o1')).rejects.toMatchObject({ code: 500200002 })
+    await expect(service.closeOrder('o1', USER_ID)).rejects.toMatchObject({ code: 500200002 })
   })
 
   it('手动关闭 pending 订单：渠道未支付才关（关单前查单防护）', async () => {
@@ -398,7 +411,7 @@ describe('关单防护（closeOrder / closeExpiredPending，附录 §6 / PY4）'
       order: makeOrder({ channel: 'wechat' }),
       provider: { queryOrder: jest.fn(() => Promise.resolve({ paid: false, channelStatus: 'NOTPAY' })) },
     })
-    await service.closeOrder('o1')
+    await service.closeOrder('o1', USER_ID)
     // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(provider.queryOrder).toHaveBeenCalledWith('AH261017100000ABC123')
     expect(orderRepo.update).toHaveBeenCalledWith({ id: 'o1' }, { status: 'closed' })
@@ -418,7 +431,7 @@ describe('关单防护（closeOrder / closeExpiredPending，附录 §6 / PY4）'
         })),
       },
     })
-    await expect(service.closeOrder('o1')).rejects.toMatchObject({ code: 500200002 })
+    await expect(service.closeOrder('o1', USER_ID)).rejects.toMatchObject({ code: 500200002 })
     expect(orderRepo.update).toHaveBeenCalledWith(
       { id: 'o1' },
       expect.objectContaining({ status: 'paid', transactionId: 'WX-TX-2' }),
@@ -431,7 +444,7 @@ describe('关单防护（closeOrder / closeExpiredPending，附录 §6 / PY4）'
       order: makeOrder({ channel: 'wechat' }),
       provider: { queryOrder: jest.fn(() => Promise.reject(new Error('渠道超时'))) },
     })
-    await expect(service.closeOrder('o1')).rejects.toMatchObject({ code: 500200005 })
+    await expect(service.closeOrder('o1', USER_ID)).rejects.toMatchObject({ code: 500200005 })
     expect(orderRepo.update).not.toHaveBeenCalled()
   })
 

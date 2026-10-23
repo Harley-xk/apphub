@@ -15,6 +15,10 @@ function makeService(options: {
   userRoles?: { userId: string, roleId: string }[]
   posts?: { id: string }[]
   userPosts?: { userId: string, postId: string }[]
+  /** 账户级应用授权存量（差集写入用例） */
+  appScopes?: { userId: string, appId: string }[]
+  /** 应用查找端口可见的应用 id（缺省视为全部可见；用于软删过滤与不存在拒绝） */
+  existingAppIds?: string[]
 } = {}) {
   // 逐行浅拷贝：service 会就地修改实体字段，防跨用例污染共享常量
   const users = (options.users ?? []).map(row => ({ ...row }))
@@ -26,6 +30,9 @@ function makeService(options: {
   const userPostInserted: { userId: string, postId: string }[] = []
   const userPostDeleted: Record<string, unknown>[] = []
   const userRoleDeleted: Record<string, unknown>[] = []
+  const appScopes = (options.appScopes ?? []).map(row => ({ ...row }))
+  const userAppScopeDeleted: Record<string, unknown>[] = []
+  const userAppScopeInserted: { userId: string, appId: string }[] = []
 
   const userRepository = {
     findOne: ({ where }: { where: Record<string, unknown> }) =>
@@ -100,17 +107,58 @@ function makeService(options: {
       return Promise.resolve(posts.filter(post => wanted.includes(post.id)))
     },
   }
+  const userAppScopeRepository = {
+    find: ({ where }: { where: Record<string, unknown> }) =>
+      Promise.resolve(
+        appScopes.filter(row =>
+          Object.entries(where).every(([key, value]) => (row as Record<string, unknown>)[key] === value),
+        ),
+      ),
+    delete: (criteria: Record<string, unknown>) => {
+      userAppScopeDeleted.push(criteria)
+      return Promise.resolve({})
+    },
+    insert: (rows: { userId: string, appId: string }[]) => {
+      userAppScopeInserted.push(...rows)
+      return Promise.resolve({})
+    },
+  }
+  const visibleAppIds = options.existingAppIds
+  const appLookup = {
+    assertAppsExist: (appIds: string[]) => {
+      const missing = appIds.filter(appId => visibleAppIds !== undefined && !visibleAppIds.includes(appId))
+      if (missing.length > 0)
+        return Promise.reject(Object.assign(new Error('应用不存在'), { code: 300100001 }))
+      return Promise.resolve()
+    },
+    listAppsByIds: (appIds: string[]) =>
+      Promise.resolve(
+        appIds
+          .filter(appId => visibleAppIds === undefined || visibleAppIds.includes(appId))
+          .map(appId => ({ id: appId, appKey: `ah_${appId}`, name: `应用 ${appId}` })),
+      ),
+  }
   const service = new UserService(
     userRepository as never,
     userRoleRepository as never,
     userPostRepository as never,
+    userAppScopeRepository as never,
     roleRepository as never,
     deptRepository as never,
     postRepository as never,
     { get: () => options.envValue } as never,
     { getValueByKey: () => Promise.resolve(options.configTableValue ?? null) } as never,
+    { get: () => appLookup } as never,
   )
-  return { service, saved, userPostInserted, userPostDeleted, userRoleDeleted }
+  return {
+    service,
+    saved,
+    userPostInserted,
+    userPostDeleted,
+    userRoleDeleted,
+    userAppScopeInserted,
+    userAppScopeDeleted,
+  }
 }
 
 describe('UserService 初始口令三级兜底链', () => {
@@ -259,5 +307,79 @@ describe('UserService 最后超管保护', () => {
     const { service, saved } = makeService(lastSuperAdmin)
     await service.update({ id: 'u-admin', nickname: '新昵称', status: true })
     expect(saved[0]).toMatchObject({ id: 'u-admin', nickname: '新昵称', status: true })
+  })
+})
+
+describe('UserService 应用授权（数据范围）', () => {
+  const USERS = [{ id: 'u1', username: 'bob', nickname: '鲍勃', status: true }]
+
+  it('差集写入：新增目标应用、删除多余授权（物理删除）', async () => {
+    const { service, userAppScopeInserted, userAppScopeDeleted } = makeService({
+      users: USERS,
+      appScopes: [
+        { userId: 'u1', appId: 'a1' },
+        { userId: 'u1', appId: 'a2' },
+      ],
+      existingAppIds: ['a1', 'a2', 'a3'],
+    })
+    await service.assignAppScope('u1', ['a1', 'a3'])
+    // a2 移除（In 操作符的 value 为待删集合）
+    const removed = userAppScopeDeleted[0]?.appId as { value?: string[] } | undefined
+    expect(removed?.value).toEqual(['a2'])
+    expect(userAppScopeInserted).toEqual([{ userId: 'u1', appId: 'a3' }])
+  })
+
+  it('重复 appId 应去重（唯一索引语义，不产生重复插入）', async () => {
+    const { service, userAppScopeInserted } = makeService({ users: USERS, existingAppIds: ['a1'] })
+    await service.assignAppScope('u1', ['a1', 'a1', 'a1'])
+    expect(userAppScopeInserted).toEqual([{ userId: 'u1', appId: 'a1' }])
+  })
+
+  it('目标与现有完全一致时应零写入（无变化不产生 SQL）', async () => {
+    const { service, userAppScopeInserted, userAppScopeDeleted } = makeService({
+      users: USERS,
+      appScopes: [{ userId: 'u1', appId: 'a1' }],
+      existingAppIds: ['a1'],
+    })
+    await service.assignAppScope('u1', ['a1'])
+    expect(userAppScopeInserted).toHaveLength(0)
+    expect(userAppScopeDeleted).toHaveLength(0)
+  })
+
+  it('授权不存在的应用应拒绝（APP_NOT_EXISTS，不落任何写入）', async () => {
+    const { service, userAppScopeInserted, userAppScopeDeleted } = makeService({
+      users: USERS,
+      existingAppIds: ['a1'],
+    })
+    await expect(service.assignAppScope('u1', ['a1', 'ghost'])).rejects.toMatchObject({ code: 300100001 })
+    expect(userAppScopeInserted).toHaveLength(0)
+    expect(userAppScopeDeleted).toHaveLength(0)
+  })
+
+  it('授权回显应过滤已软删应用（授权行残留不产生权限）', async () => {
+    const { service } = makeService({
+      users: USERS,
+      appScopes: [
+        { userId: 'u1', appId: 'a1' },
+        { userId: 'u1', appId: 'a2' },
+      ],
+      existingAppIds: ['a1'],
+    })
+    const scope = await service.getAppScope('u1')
+    expect(scope.appIds).toEqual(['a1'])
+    expect(scope.apps).toEqual([{ id: 'a1', appKey: 'ah_a1', name: '应用 a1' }])
+  })
+
+  it('用户授权行不得跨用户混入（按 userId 过滤）', async () => {
+    const { service } = makeService({
+      users: USERS,
+      appScopes: [
+        { userId: 'u1', appId: 'a1' },
+        { userId: 'u2', appId: 'a2' },
+      ],
+      existingAppIds: ['a1', 'a2'],
+    })
+    const scope = await service.getAppScope('u1')
+    expect(scope.appIds).toEqual(['a1'])
   })
 })

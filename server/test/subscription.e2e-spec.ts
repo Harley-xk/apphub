@@ -17,6 +17,7 @@ import { LoginLogEntity } from '../src/modules/system/entities/login-log.entity'
 import { OperateLogEntity } from '../src/modules/system/entities/operate-log.entity'
 import { RolePermissionEntity } from '../src/modules/system/entities/role-permission.entity'
 import { RoleEntity } from '../src/modules/system/entities/role.entity'
+import { UserAppScopeEntity } from '../src/modules/system/entities/user-app-scope.entity'
 import { UserRoleEntity } from '../src/modules/system/entities/user-role.entity'
 import { UserEntity } from '../src/modules/system/entities/user.entity'
 
@@ -31,21 +32,44 @@ const ADMIN_ID = '00000000-0000-4000-8000-000000000001'
 const SUPER_ADMIN_ROLE_ID = '00000000-0000-4000-8000-000000000002'
 const PLAIN_USER_ID = '00000000-0000-4000-8000-000000000003'
 const APP_ID = '00000000-0000-4000-8000-0000000000b1'
+const OTHER_APP_ID = '00000000-0000-4000-8000-0000000000b3'
 const MEMBER_ID = '00000000-0000-4000-8000-0000000000b2'
+// 应用管理员（数据范围 = 按应用）：仅授权 APP_ID，用于订阅域收口验收
+const APP_ADMIN_ROLE_ID = '00000000-0000-4000-8000-000000000004'
+const APP_ADMIN_USER_ID = '00000000-0000-4000-8000-000000000005'
 
 // ===== 内存数据 =====
 
 const users: Partial<UserEntity>[] = [
   { id: ADMIN_ID, username: 'admin', nickname: '系统管理员', password: PASSWORD_HASH, status: true },
   { id: PLAIN_USER_ID, username: 'nobody', nickname: '无权限用户', password: PASSWORD_HASH, status: true },
+  { id: APP_ADMIN_USER_ID, username: 'appadmin', nickname: '应用管理员', password: PASSWORD_HASH, status: true },
 ]
 const roles: Partial<RoleEntity>[] = [
-  { id: SUPER_ADMIN_ROLE_ID, code: 'super_admin', name: '超级管理员', status: true },
+  { id: SUPER_ADMIN_ROLE_ID, code: 'super_admin', name: '超级管理员', status: true, dataScope: 'all' },
+  { id: APP_ADMIN_ROLE_ID, code: 'app_admin', name: '应用管理员', status: true, dataScope: 'app' },
 ]
-const userRoles: Partial<UserRoleEntity>[] = [{ userId: ADMIN_ID, roleId: SUPER_ADMIN_ROLE_ID }]
+const userRoles: Partial<UserRoleEntity>[] = [
+  { userId: ADMIN_ID, roleId: SUPER_ADMIN_ROLE_ID },
+  { userId: APP_ADMIN_USER_ID, roleId: APP_ADMIN_ROLE_ID },
+]
+/** app_admin 的订阅域权限行（数据范围只认授予该域权限的角色——A4） */
+const rolePermissions: Partial<RolePermissionEntity>[] = [
+  { roleId: APP_ADMIN_ROLE_ID, permission: 'subscription:plan:query' },
+  { roleId: APP_ADMIN_ROLE_ID, permission: 'subscription:plan:create' },
+  { roleId: APP_ADMIN_ROLE_ID, permission: 'subscription:plan:update' },
+  { roleId: APP_ADMIN_ROLE_ID, permission: 'subscription:plan:remove' },
+  { roleId: APP_ADMIN_ROLE_ID, permission: 'subscription:order:query' },
+  { roleId: APP_ADMIN_ROLE_ID, permission: 'subscription:order:offline-create' },
+  { roleId: APP_ADMIN_ROLE_ID, permission: 'subscription:order:close' },
+  { roleId: APP_ADMIN_ROLE_ID, permission: 'subscription:sub:query' },
+]
+/** 账户级授权：仅 APP_ID */
+const userAppScopes: Partial<UserAppScopeEntity>[] = [{ userId: APP_ADMIN_USER_ID, appId: APP_ID }]
 const operateLogs: Partial<OperateLogEntity>[] = []
 const apps: Partial<AppEntity>[] = [
   { id: APP_ID, appKey: 'ah_subscribe000001', appSecret: 'sub-secret', name: '订阅链路应用', appType: ['desktop'], clientType: 'confidential', framework: 'electron', status: 'enabled' },
+  { id: OTHER_APP_ID, appKey: 'ah_subscribe000002', appSecret: 'other-secret', name: '未授权订阅应用', appType: ['desktop'], clientType: 'confidential', framework: 'electron', status: 'enabled' },
 ]
 const members: Partial<MemberEntity>[] = [
   { id: MEMBER_ID, nickname: '订阅测试会员', avatarUrl: null, status: 'active', registeredAppId: APP_ID, lastLoginAt: null },
@@ -152,6 +176,7 @@ describe('SubscriptionModule (e2e)', () => {
   let server: Server
   let adminToken: string
   let plainToken: string
+  let appAdminToken: string
   let monthlyPlanId: string
   let yearlyPlanId: string
   let permanentPlanId: string
@@ -174,8 +199,16 @@ describe('SubscriptionModule (e2e)', () => {
       })
       .overrideProvider(getRepositoryToken(RoleEntity))
       .useValue({
-        find: (criteria: { where?: { status?: boolean } }) =>
-          Promise.resolve(roles.filter(role => role.status === criteria.where?.status)),
+        find: (criteria: { where?: { status?: boolean, id?: { value?: string[] } } }) => {
+          const where = criteria.where ?? {}
+          const roleIds = where.id?.value
+          return Promise.resolve(
+            roles.filter(role =>
+              (where.status === undefined || role.status === where.status)
+              && (roleIds === undefined || roleIds.includes(role.id!)),
+            ),
+          )
+        },
       })
       .overrideProvider(getRepositoryToken(UserRoleEntity))
       .useValue({
@@ -183,7 +216,24 @@ describe('SubscriptionModule (e2e)', () => {
           Promise.resolve(userRoles.filter(relation => relation.userId === criteria.where.userId)),
       })
       .overrideProvider(getRepositoryToken(RolePermissionEntity))
-      .useValue({ find: () => Promise.resolve([]) })
+      .useValue({
+        find: (criteria: { where?: { roleId?: { value?: string[] }, permission?: { value?: string } } }) => {
+          const where = criteria.where ?? {}
+          const roleIds = where.roleId?.value
+          const prefix = (where.permission?.value ?? '').replace('%', '')
+          return Promise.resolve(
+            rolePermissions.filter(relation =>
+              (roleIds === undefined || roleIds.includes(relation.roleId!))
+              && (prefix === '' || (relation.permission ?? '').startsWith(prefix)),
+            ),
+          )
+        },
+      })
+      .overrideProvider(getRepositoryToken(UserAppScopeEntity))
+      .useValue({
+        find: (criteria: { where: { userId: string } }) =>
+          Promise.resolve(userAppScopes.filter(row => row.userId === criteria.where.userId)),
+      })
       .overrideProvider(getRepositoryToken(AppEntity))
       .useValue({ findOne: (o: { where?: Record<string, unknown> }) => Promise.resolve(apps.find(a => matches(a, o.where)) ?? null), find: () => Promise.resolve(apps) })
       .overrideProvider(getRepositoryToken(MemberEntity))
@@ -217,6 +267,7 @@ describe('SubscriptionModule (e2e)', () => {
     }
     adminToken = await login('admin')
     plainToken = await login('nobody')
+    appAdminToken = await login('appadmin')
   })
 
   afterAll(async () => {
@@ -266,6 +317,35 @@ describe('SubscriptionModule (e2e)', () => {
       const res = await request(server)
         .get('/api/subscription/plan').set('Authorization', `Bearer ${plainToken}`)
       expect(res.status).toBe(403)
+    })
+
+    it('数据范围收窄：app_admin 列表只含授权应用，显式查询 / 新建未授权应用应 403 专用码', async () => {
+      // 列表按订阅域范围注入 appId IN：其他应用的计划不可见
+      const listRes = await request(server)
+        .get('/api/subscription/plan').set('Authorization', `Bearer ${appAdminToken}`)
+      const listBody = listRes.body as ApiResponse<{ list: { appId: string }[], total: number }>
+      expect(listBody.code).toBe(0)
+      expect(listBody.data!.total).toBe(3)
+      expect(listBody.data!.list.every(plan => plan.appId === APP_ID)).toBe(true)
+
+      // 授权应用的显式筛选放行
+      const allowed = await request(server)
+        .get('/api/subscription/plan').set('Authorization', `Bearer ${appAdminToken}`).query({ appId: APP_ID })
+      expect(allowed.status).toBe(200)
+
+      // 显式查询未授权应用 / 在未授权应用下建计划 → 403 + 300100005
+      const forbidden = (res: { body: unknown }) => {
+        expect((res.body as ApiResponse<unknown>).code).toBe(300100005)
+      }
+      await request(server)
+        .get('/api/subscription/plan').set('Authorization', `Bearer ${appAdminToken}`).query({ appId: OTHER_APP_ID })
+        .expect(403)
+        .expect(forbidden)
+      await request(server)
+        .post('/api/subscription/plan').set('Authorization', `Bearer ${appAdminToken}`)
+        .send({ appId: OTHER_APP_ID, name: '越权计划', periodType: 'monthly', price: 100 })
+        .expect(403)
+        .expect(forbidden)
     })
   })
 

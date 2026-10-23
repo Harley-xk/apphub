@@ -46,7 +46,28 @@ export const DICT_DATA_DISABLE_ID = '00000000-0000-4000-8000-000000000033'
 /** 参数：新建用户初始口令 id */
 export const CONFIG_INIT_PASSWORD_ID = '00000000-0000-4000-8000-000000000041'
 
+/** 预置角色：应用管理员 id（普通角色，可改名 / 改权限 / 删除——应用管理员与数据范围设计 A7） */
+export const APP_ADMIN_ROLE_ID = '00000000-0000-4000-8000-000000000004'
+
+/** 预置角色：应用管理员标识（种子迁移静态写入，权限清单见迁移；非内置保护角色） */
+export const APP_ADMIN_ROLE_CODE = 'app_admin'
+
 // ===== 业务常量 =====
+
+/** 角色数据范围取值域：all 全局 / app 按应用收窄（应用管理员与数据范围设计 §4.1） */
+export const DATA_SCOPE_VALUES = ['all', 'app'] as const
+
+/** 数据范围：全局（不做数据条件限制） */
+export const DATA_SCOPE_ALL = 'all'
+
+/** 数据范围：按应用收窄（以账户级应用授权集合为边界，fail-closed） */
+export const DATA_SCOPE_APP = 'app'
+
+/** 应用级数据范围的作用域（按域判定，只看授予该域权限的角色——主张 A4） */
+export const APP_SCOPE_DOMAINS = ['appcenter', 'subscription'] as const
+
+/** 应用级数据范围作用域类型 */
+export type AppScopeDomain = (typeof APP_SCOPE_DOMAINS)[number]
 
 /** BCrypt cost 因子（$2a$10$）：用户域建号与个人中心改密共用，兼顾安全与登录耗时 */
 export const BCRYPT_COST = 10

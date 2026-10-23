@@ -14,6 +14,8 @@ export interface RoleVO {
   code: string
   sort: number
   status: boolean
+  /** 数据范围：all 全部应用 / app 按应用收窄（appcenter + subscription 生效） */
+  dataScope: string
   remark: string | null
   createTime: number
 }
@@ -23,6 +25,8 @@ export interface RoleCreateData {
   name: string
   code: string
   sort?: number
+  /** 数据范围（all / app），缺省 all */
+  dataScope?: string
   remark?: string
 }
 
@@ -32,6 +36,8 @@ export interface RoleUpdateData {
   name: string
   status: boolean
   sort?: number
+  /** 数据范围（all / app） */
+  dataScope?: string
   remark?: string
 }
 

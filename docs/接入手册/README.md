@@ -18,13 +18,15 @@
 
 ### 2.1 服务地址
 
-接入时由平台方提供环境基址（形如 `https://api.example.com`），全部接口挂在 `/api` 前缀下：
+平台线上环境基址为 **`https://appcenter.witice.top`**，全部开放接口挂在 `/api` 前缀下：
 
 ```text
-{基址}/api/open/app/version/check      ← 更新检测
-{基址}/api/open/member/**              ← 会员认证
-{基址}/api/open/subscription/**        ← 订阅
+https://appcenter.witice.top/api/open/app/version/check      ← 更新检测
+https://appcenter.witice.top/api/open/member/**              ← 会员认证
+https://appcenter.witice.top/api/open/subscription/**        ← 订阅
 ```
+
+> 基址不含 `/api` 后缀（配置 `baseUrl` 时填 `https://appcenter.witice.top`）。私有化部署或联调环境使用平台方另行提供的基址，下文示例统一按线上基址书写。
 
 ### 2.2 统一响应结构
 

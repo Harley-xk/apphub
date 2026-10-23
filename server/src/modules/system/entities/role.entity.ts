@@ -7,6 +7,7 @@
 import { Column, Entity, Index } from 'typeorm'
 
 import { BaseEntity } from '../../../common/orm/base.entity'
+import { DATA_SCOPE_ALL } from '../system.constants'
 
 @Entity('system_roles')
 // 部分唯一索引：软删历史行不占位，删除角色后同标识角色可重建
@@ -31,4 +32,11 @@ export class RoleEntity extends BaseEntity {
   /** 备注 */
   @Column({ type: 'varchar', length: 500, nullable: true })
   remark: string | null
+
+  /**
+   * 数据范围：all 全局 / app 按应用收窄（应用管理员与数据范围设计 §4.1）。
+   * 仅对应用维度模块（appcenter / subscription）生效，存量角色迁移后一律 all，行为不变。
+   */
+  @Column({ type: 'varchar', length: 16, default: DATA_SCOPE_ALL })
+  dataScope: string
 }

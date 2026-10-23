@@ -10,6 +10,7 @@ import { IsNull } from 'typeorm'
 import type { FindOptionsWhere, Repository } from 'typeorm'
 
 import { businessError } from '../../../common/exceptions/business-error'
+import { AppService } from '../app/app.service'
 import { buildPackageObjectKey, PACKAGE_PLATFORM, VERSION_STATUS } from '../appcenter.constants'
 import { AppChannelEntity } from '../entities/app-channel.entity'
 import { AppPackageEntity } from '../entities/app-package.entity'
@@ -35,10 +36,13 @@ export class PackageService {
     private readonly channelRepository: Repository<AppChannelEntity>,
     @Inject(STORAGE_SERVICE)
     private readonly storageService: StorageService,
+    private readonly appService: AppService,
   ) {}
 
-  /** 版本下包记录列表（下钻页包面板数据源） */
-  async list(versionId: string): Promise<PackageVo[]> {
+  /** 版本下包记录列表（下钻页包面板数据源；经 versionId → appId 反查做数据范围校验） */
+  async list(versionId: string, userId: string): Promise<PackageVo[]> {
+    const version = await this.getExistsVersion(versionId)
+    await this.appService.assertAccessible(userId, version.appId)
     const packages = await this.packageRepository.find({
       where: { versionId },
       order: { createTime: 'ASC' },
@@ -47,8 +51,8 @@ export class PackageService {
   }
 
   /** 签发直传凭证：draft 校验 + (platform, arch) 占用校验 + 对象键生成下发（A3 直传方案） */
-  async issueUploadToken(versionId: string, dto: PackageUploadTokenDto): Promise<PackageUploadTokenVo> {
-    const { version, app, channel } = await this.loadDraftContext(versionId)
+  async issueUploadToken(versionId: string, dto: PackageUploadTokenDto, userId: string): Promise<PackageUploadTokenVo> {
+    const { version, app, channel } = await this.loadDraftContext(versionId, userId)
     await this.assertPlatformAvailable(versionId, dto.platform, dto.arch ?? null)
     // 对象键由后端生成下发（前端不自由拼键），blockmap 放包同目录
     const objectKey = buildPackageObjectKey({
@@ -64,8 +68,8 @@ export class PackageService {
   }
 
   /** 登记包记录：HeadObject 校验对象存在，file_size 以服务端 content-length 为准落库 */
-  async register(versionId: string, dto: PackageRegisterDto): Promise<string> {
-    await this.loadDraftContext(versionId)
+  async register(versionId: string, dto: PackageRegisterDto, userId: string): Promise<string> {
+    await this.loadDraftContext(versionId, userId)
     await this.assertPlatformAvailable(versionId, dto.platform, dto.arch ?? null)
 
     const objectKey = dto.objectKey?.trim() ?? ''
@@ -121,7 +125,7 @@ export class PackageService {
   }
 
   /** 删除包：仅 draft 版本；软删记录并同步清理 OSS 对象（安装包 + blockmap） */
-  async remove(versionId: string, pkgId: string): Promise<void> {
+  async remove(versionId: string, pkgId: string, userId: string): Promise<void> {
     const pkg = await this.packageRepository.findOne({ where: { id: pkgId, versionId } })
     if (!pkg) {
       throw businessError(AppcenterErrorCode.PACKAGE_NOT_EXISTS.message, {
@@ -129,6 +133,7 @@ export class PackageService {
       })
     }
     const version = await this.getExistsVersion(versionId)
+    await this.appService.assertAccessible(userId, version.appId)
     if (version.status !== VERSION_STATUS.DRAFT) {
       throw businessError('仅草稿版本的包允许删除', { code: AppcenterErrorCode.VERSION_STATUS_FORBIDDEN })
     }
@@ -163,13 +168,14 @@ export class PackageService {
     }
   }
 
-  /** 加载版本上下文并校验 draft 状态（上传 / 登记仅草稿可操作） */
-  private async loadDraftContext(versionId: string): Promise<{
+  /** 加载版本上下文并校验 draft 状态（上传 / 登记仅草稿可操作；先完成数据范围校验） */
+  private async loadDraftContext(versionId: string, userId: string): Promise<{
     version: AppVersionEntity
     app: AppEntity
     channel: AppChannelEntity
   }> {
     const version = await this.getExistsVersion(versionId)
+    await this.appService.assertAccessible(userId, version.appId)
     if (version.status !== VERSION_STATUS.DRAFT) {
       throw businessError('仅草稿版本允许上传与登记安装包', { code: AppcenterErrorCode.VERSION_STATUS_FORBIDDEN })
     }

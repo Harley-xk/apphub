@@ -14,6 +14,10 @@ function primaryButton(scope: import('@playwright/test').Locator, name: string) 
   return scope.getByRole('button', { name })
 }
 
+// 角色表新增「数据范围」列后总宽超出 1280：加宽视口，避免 vxe 把 fixed 操作列拆成独立 wrapper
+// 导致主区行内定位不到操作按钮（与应用管理用例同款前提）
+test.use({ viewport: { width: 1600, height: 900 } })
+
 test.beforeEach(async ({ page, request }) => {
   const health = await request.get('http://localhost:3000/api/health').catch(() => null)
   test.skip(!health?.ok(), '后端服务未启动或数据库未就绪（需先配置 server/.env 并启动 pnpm dev:server）')
@@ -166,7 +170,7 @@ test.describe('系统管理', () => {
     })
     await page.goto('/system/user')
 
-    // 主区行定位（fixed 操作列另有克隆区，行级按钮去重）；admin 行按钮最多（4 个）
+    // 主区行定位（fixed 操作列另有克隆区，行级按钮去重）；admin 行按钮最多（5 个）
     const row = page
       .locator('.vxe-table--main-wrapper .vxe-body--row')
       .filter({ hasText: '系统管理员' })

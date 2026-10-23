@@ -10,6 +10,7 @@ import { Not } from 'typeorm'
 import type { Repository } from 'typeorm'
 
 import { businessError } from '../../../common/exceptions/business-error'
+import { AppService } from '../app/app.service'
 import { CHANNEL_STATUS, STABLE_CHANNEL_CODE } from '../appcenter.constants'
 import { AppChannelEntity } from '../entities/app-channel.entity'
 import { AppcenterErrorCode } from '../error-codes'
@@ -20,10 +21,12 @@ export class ChannelService {
   constructor(
     @InjectRepository(AppChannelEntity)
     private readonly channelRepository: Repository<AppChannelEntity>,
+    private readonly appService: AppService,
   ) {}
 
-  /** 应用内通道全量列表（数量有限不分页） */
-  async list(appId: string): Promise<ChannelVo[]> {
+  /** 应用内通道全量列表（数量有限不分页；路径 :id 即 appId，先做存在性与数据范围校验） */
+  async list(appId: string, userId: string): Promise<ChannelVo[]> {
+    await this.appService.assertAccessible(userId, appId)
     const list = await this.channelRepository.find({
       where: { appId },
       order: { sort: 'ASC', createTime: 'ASC' },
@@ -32,7 +35,8 @@ export class ChannelService {
   }
 
   /** 创建通道：code 查重（含软删历史——withDeleted 口径，设计 §4.6） */
-  async create(appId: string, dto: ChannelCreateDto): Promise<string> {
+  async create(appId: string, dto: ChannelCreateDto, userId: string): Promise<string> {
+    await this.appService.assertAccessible(userId, appId)
     await this.validateCodeAvailable(appId, dto.code)
     const channel = await this.channelRepository.save(
       this.channelRepository.create({
@@ -47,7 +51,8 @@ export class ChannelService {
   }
 
   /** 更新通道（code 不参与更新：参与 OSS 对象键与 feed URL，创建后不可改） */
-  async update(appId: string, channelId: string, dto: ChannelUpdateDto): Promise<void> {
+  async update(appId: string, channelId: string, dto: ChannelUpdateDto, userId: string): Promise<void> {
+    await this.appService.assertAccessible(userId, appId)
     const channel = await this.getExistsChannel(appId, channelId)
     channel.name = dto.name
     channel.status = dto.status ?? channel.status
@@ -56,7 +61,8 @@ export class ChannelService {
   }
 
   /** 删除通道：stable 不可删（主张 A1） */
-  async remove(appId: string, channelId: string): Promise<void> {
+  async remove(appId: string, channelId: string, userId: string): Promise<void> {
+    await this.appService.assertAccessible(userId, appId)
     const channel = await this.getExistsChannel(appId, channelId)
     if (channel.code === STABLE_CHANNEL_CODE) {
       throw businessError(AppcenterErrorCode.STABLE_CHANNEL_UNREMOVABLE.message, {

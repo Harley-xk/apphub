@@ -6,18 +6,23 @@
  */
 import { Injectable } from '@nestjs/common'
 import { InjectRepository } from '@nestjs/typeorm'
-import { Like } from 'typeorm'
+import { In, Like } from 'typeorm'
 import type { FindOptionsWhere, Repository } from 'typeorm'
 
 import { generateAppKey, generateAppSecret } from './app-token.util'
 import { businessError } from '../../../common/exceptions/business-error'
 import type { PageResult } from '../../../common/interfaces/page-result.interface'
+import type { AppOptionVo } from '../../system/app-scope/app-lookup.port'
+import { AppScopeService } from '../../system/app-scope/app-scope.service'
 import { APP_STATUS, CHANNEL_STATUS, STABLE_CHANNEL_CODE, VERSION_STATUS } from '../appcenter.constants'
 import { AppChannelEntity } from '../entities/app-channel.entity'
 import { AppVersionEntity } from '../entities/app-version.entity'
 import { AppEntity } from '../entities/app.entity'
 import { AppcenterErrorCode } from '../error-codes'
-import type { AppCreateDto, AppCredentialVo, AppPageDto, AppUpdateDto, AppVo } from './dto/app.dto'
+import type { AppCreateDto, AppCredentialVo, AppOptionsDto, AppPageDto, AppUpdateDto, AppVo } from './dto/app.dto'
+
+/** 可选应用下拉的最大返回条数（授权弹窗远程搜索与订阅页筛选，应用数量有限） */
+const APP_OPTIONS_LIMIT = 200
 
 @Injectable()
 export class AppService {
@@ -26,11 +31,20 @@ export class AppService {
     private readonly appRepository: Repository<AppEntity>,
     @InjectRepository(AppVersionEntity)
     private readonly versionRepository: Repository<AppVersionEntity>,
+    private readonly appScopeService: AppScopeService,
   ) {}
 
-  /** 分页查询（名称模糊、状态 / 调用方类型 / 框架精确过滤） */
-  async getPage(dto: AppPageDto): Promise<PageResult<AppVo>> {
+  /**
+   * 分页查询（名称模糊、状态 / 调用方类型 / 框架精确过滤）。
+   * 数据范围收窄：SCOPED 时注入 `id IN (appIds)`，空集合直接返回空页（fail-closed，A5）。
+   */
+  async getPage(dto: AppPageDto, userId: string): Promise<PageResult<AppVo>> {
+    const scopeAppIds = await this.appScopeService.getListAppIds(userId, 'appcenter')
+    if (scopeAppIds !== null && scopeAppIds.length === 0)
+      return { list: [], total: 0 }
     const where: FindOptionsWhere<AppEntity> = {}
+    if (scopeAppIds !== null)
+      where.id = In(scopeAppIds)
     if (dto.name !== undefined && dto.name !== '')
       where.name = Like(`%${dto.name}%`)
     if (dto.status !== undefined)
@@ -48,9 +62,34 @@ export class AppService {
     return { list: list.map(app => this.toVo(app)), total }
   }
 
+  /**
+   * 当前用户可管理的应用精简列表（授权弹窗与订阅页应用筛选的数据源）；
+   * keyword 同时匹配应用名称与 AppKey（远程搜索）。
+   */
+  async listOptions(dto: AppOptionsDto, userId: string): Promise<AppOptionVo[]> {
+    const scopeAppIds = await this.appScopeService.getListAppIds(userId, 'appcenter')
+    if (scopeAppIds !== null && scopeAppIds.length === 0)
+      return []
+    const base: FindOptionsWhere<AppEntity> = scopeAppIds !== null ? { id: In(scopeAppIds) } : {}
+    const keyword = dto.keyword?.trim()
+    const where: FindOptionsWhere<AppEntity> | FindOptionsWhere<AppEntity>[] = keyword
+      ? [
+          { ...base, name: Like(`%${keyword}%`) },
+          { ...base, appKey: Like(`%${keyword}%`) },
+        ]
+      : base
+    const apps = await this.appRepository.find({
+      select: ['id', 'appKey', 'name'],
+      where,
+      order: { sort: 'ASC', createTime: 'DESC' },
+      take: APP_OPTIONS_LIMIT,
+    })
+    return apps.map(app => ({ id: app.id, appKey: app.appKey, name: app.name }))
+  }
+
   /** 应用详情（不含 Secret） */
-  async get(id: string): Promise<AppVo> {
-    return this.toVo(await this.getExistsApp(id))
+  async get(id: string, userId: string): Promise<AppVo> {
+    return this.toVo(await this.assertAccessible(userId, id))
   }
 
   /**
@@ -90,8 +129,8 @@ export class AppService {
   }
 
   /** 编辑应用元数据（凭证与 AppKey 不在此变更） */
-  async update(dto: AppUpdateDto): Promise<void> {
-    const app = await this.getExistsApp(dto.id)
+  async update(dto: AppUpdateDto, userId: string): Promise<void> {
+    const app = await this.assertAccessible(userId, dto.id)
     app.name = dto.name
     app.appType = dto.appType
     app.framework = dto.framework ?? null
@@ -102,23 +141,23 @@ export class AppService {
   }
 
   /** 启用 / 停用（停用后其开放 API 调用全部拒绝） */
-  async updateStatus(id: string, status: string): Promise<void> {
-    const app = await this.getExistsApp(id)
+  async updateStatus(id: string, status: string, userId: string): Promise<void> {
+    const app = await this.assertAccessible(userId, id)
     app.status = status
     await this.appRepository.save(app)
   }
 
   /** 重置 Secret：旧 Secret 立即失效（D22），响应携带新完整凭证（仅此一次） */
-  async resetSecret(id: string): Promise<AppCredentialVo> {
-    const app = await this.getExistsApp(id)
+  async resetSecret(id: string, userId: string): Promise<AppCredentialVo> {
+    const app = await this.assertAccessible(userId, id)
     app.appSecret = generateAppSecret()
     await this.appRepository.save(app)
     return { id: app.id, appKey: app.appKey, appSecret: app.appSecret }
   }
 
   /** 删除应用：有已发布版本不允许删（先下线版本），软删（通道 / 版本历史保留可追溯） */
-  async remove(id: string): Promise<void> {
-    const app = await this.getExistsApp(id)
+  async remove(id: string, userId: string): Promise<void> {
+    const app = await this.assertAccessible(userId, id)
     const publishedCount = await this.versionRepository.count({
       where: { appId: id, status: VERSION_STATUS.PUBLISHED },
     })
@@ -136,6 +175,16 @@ export class AppService {
     if (!appKey)
       return null
     return this.appRepository.findOne({ where: { appKey } })
+  }
+
+  /**
+   * 取当前用户可操作的应用：不存在（含已软删）抛 APP_NOT_EXISTS（404 优先）；
+   * 存在但不在数据范围内抛 APP_SCOPE_FORBIDDEN（403，A11）。通道 / 版本 / 包服务复用此入口。
+   */
+  async assertAccessible(userId: string, appId: string): Promise<AppEntity> {
+    const app = await this.getExistsApp(appId)
+    await this.appScopeService.assertAppAllowed(userId, app.id, 'appcenter')
+    return app
   }
 
   /** 按主键查应用：不存在（含已软删）抛 APP_NOT_EXISTS */

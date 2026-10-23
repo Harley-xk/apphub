@@ -4,7 +4,7 @@
  *
  * 描述: 用户服务：分页查询（部门 / 岗位批量补全）、创建、更新、软删、重置密码（参数表驱动初始口令）、角色与岗位分配
  */
-import { Injectable } from '@nestjs/common'
+import { Injectable, Logger } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { InjectRepository } from '@nestjs/typeorm'
 import * as bcrypt from 'bcryptjs'
@@ -13,19 +13,31 @@ import type { FindOptionsWhere, Repository } from 'typeorm'
 
 import { businessError } from '../../../common/exceptions/business-error'
 import type { PageResult } from '../../../common/interfaces/page-result.interface'
+import { AppLookupRegistry } from '../app-scope/app-lookup.port'
+import type { AppLookupPort } from '../app-scope/app-lookup.port'
 import { SystemConfigService } from '../config/config.service'
 import { DeptEntity } from '../entities/dept.entity'
 import { PostEntity } from '../entities/post.entity'
 import { RoleEntity } from '../entities/role.entity'
+import { UserAppScopeEntity } from '../entities/user-app-scope.entity'
 import { UserPostEntity } from '../entities/user-post.entity'
 import { UserRoleEntity } from '../entities/user-role.entity'
 import { UserEntity } from '../entities/user.entity'
 import { SystemErrorCode } from '../error-codes'
 import { BCRYPT_COST, CONFIG_KEY_USER_INIT_PASSWORD, SUPER_ADMIN_ROLE_CODE } from '../system.constants'
-import type { UserAssignRoleDto, UserCreateDto, UserPageDto, UserUpdateDto, UserVo } from './dto/user.dto'
+import type {
+  UserAppScopeVo,
+  UserAssignRoleDto,
+  UserCreateDto,
+  UserPageDto,
+  UserUpdateDto,
+  UserVo,
+} from './dto/user.dto'
 
 @Injectable()
 export class UserService {
+  private readonly logger = new Logger(UserService.name)
+
   constructor(
     @InjectRepository(UserEntity)
     private readonly userRepository: Repository<UserEntity>,
@@ -33,6 +45,8 @@ export class UserService {
     private readonly userRoleRepository: Repository<UserRoleEntity>,
     @InjectRepository(UserPostEntity)
     private readonly userPostRepository: Repository<UserPostEntity>,
+    @InjectRepository(UserAppScopeEntity)
+    private readonly userAppScopeRepository: Repository<UserAppScopeEntity>,
     @InjectRepository(RoleEntity)
     private readonly roleRepository: Repository<RoleEntity>,
     @InjectRepository(DeptEntity)
@@ -41,6 +55,7 @@ export class UserService {
     private readonly postRepository: Repository<PostEntity>,
     private readonly configService: ConfigService,
     private readonly systemConfigService: SystemConfigService,
+    private readonly appLookupRegistry: AppLookupRegistry,
   ) {}
 
   /** 分页查询（账号 / 昵称模糊、状态与部门精确过滤；部门名与岗位以两笔批量查询补全，避免 N+1） */
@@ -106,6 +121,8 @@ export class UserService {
     await this.userRepository.softRemove(user)
     await this.userRoleRepository.delete({ userId: user.id })
     await this.userPostRepository.delete({ userId: user.id })
+    // 账户级应用授权随用户一并清理（uuid 不复用，保留行只会成为孤儿数据）
+    await this.userAppScopeRepository.delete({ userId: user.id })
   }
 
   /** 重置密码：恢复为初始口令（三级兜底链，改参数即刻生效；管理操作对全部用户放行，含内置管理员） */
@@ -143,6 +160,51 @@ export class UserService {
         toAdd.map(roleId => ({ userId: user.id, roleId })),
       )
     }
+  }
+
+  /** 查用户应用授权（回显：仅返回未软删应用，授权行残留不产生权限） */
+  async getAppScope(id: string): Promise<UserAppScopeVo> {
+    await this.getExistsUser(id)
+    const relations = await this.userAppScopeRepository.find({ where: { userId: id } })
+    const boundAppIds = relations.map(relation => relation.appId)
+    if (boundAppIds.length === 0)
+      return { appIds: [], apps: [] }
+    const apps = await this.requireAppLookup().listAppsByIds(boundAppIds)
+    return { appIds: apps.map(app => app.id), apps }
+  }
+
+  /**
+   * 分配应用授权：全集差集增量绑定（物理删除多余行、插入新增行）。
+   * 与角色解耦——允许给未持有 app 范围角色的用户预先授权（A15），获得 app 范围角色后才生效。
+   */
+  async assignAppScope(id: string, appIds: string[]): Promise<void> {
+    const user = await this.getExistsUser(id)
+    const targetAppIds = [...new Set(appIds)]
+    if (targetAppIds.length > 0)
+      await this.requireAppLookup().assertAppsExist(targetAppIds)
+    const existing = await this.userAppScopeRepository.find({ where: { userId: user.id } })
+    const existingAppIds = new Set(existing.map(relation => relation.appId))
+    const target = new Set(targetAppIds)
+    // 删除：现有但目标没有
+    const toRemove = [...existingAppIds].filter(appId => !target.has(appId))
+    if (toRemove.length > 0)
+      await this.userAppScopeRepository.delete({ userId: user.id, appId: In(toRemove) })
+    // 插入：目标但现有没有
+    const toAdd = [...target].filter(appId => !existingAppIds.has(appId))
+    if (toAdd.length > 0)
+      await this.userAppScopeRepository.insert(toAdd.map(appId => ({ userId: user.id, appId })))
+    // 授权前后差异留痕（操作日志记录目标全集，服务端日志补充差异便于对账）
+    this.logger.log(
+      `应用授权变更：用户 ${user.username} 新增 [${toAdd.join('、') || '无'}] 移除 [${toRemove.join('、') || '无'}]`,
+    )
+  }
+
+  /** 取应用查找端口：appcenter 未装配时明确报错（不静默放行无效 appId） */
+  private requireAppLookup(): AppLookupPort {
+    const port = this.appLookupRegistry.get()
+    if (!port)
+      throw new Error('应用查找端口未注册：appcenter 模块未装配，无法校验应用授权')
+    return port
   }
 
   /**

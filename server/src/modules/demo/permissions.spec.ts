@@ -19,7 +19,7 @@ describe('demo 模块权限点注册表', () => {
   it('接入注册表应校验通过并扩容全集（与启动期同链路的冒烟）', () => {
     const registry = new PermissionRegistry()
     registry.registerModule({ module: DEMO_MODULE_NAME, points: DEMO_PERMISSIONS })
-    expect(registry.allCodes().length).toBe(34)
+    expect(registry.allCodes().length).toBe(35)
     expect(registry.contains('demo:product:query')).toBe(true)
   })
 })

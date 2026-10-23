@@ -46,6 +46,11 @@
         <template #status="{ row }">
           <DictTag type="common_status" :value="row.status" />
         </template>
+        <template #dataScope="{ row }">
+          <el-tag :type="row.dataScope === 'app' ? 'warning' : 'info'" size="small" effect="plain">
+            {{ row.dataScope === 'app' ? '按应用' : '全部应用' }}
+          </el-tag>
+        </template>
         <template #action="{ row }">
           <el-button
             v-hasPermi="'system:role:update'"
@@ -117,6 +122,7 @@ const columns: ApphubTableColumn[] = [
   { field: 'code', title: '角色标识', minWidth: 140 },
   { field: 'sort', title: '排序', width: 80 },
   { field: 'status', title: '状态', width: 80, slot: 'status' },
+  { field: 'dataScope', title: '数据范围', width: 110, slot: 'dataScope' },
   { field: 'remark', title: '备注', minWidth: 140 },
   { field: 'createTime', title: '创建时间', minWidth: 170, formatter: dateTimeFormatter },
   { field: 'action', title: '操作', width: 220, fixed: 'right', slot: 'action' },

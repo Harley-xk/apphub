@@ -12,6 +12,7 @@ import type { FindOptionsWhere, Repository } from 'typeorm'
 
 import { businessError } from '../../../common/exceptions/business-error'
 import type { PageResult } from '../../../common/interfaces/page-result.interface'
+import { AppService } from '../app/app.service'
 import { APP_FRAMEWORK, CHANNEL_STATUS, PACKAGE_PLATFORM, VERSION_STATUS } from '../appcenter.constants'
 import { AppChannelEntity } from '../entities/app-channel.entity'
 import { AppPackageEntity } from '../entities/app-package.entity'
@@ -37,16 +38,16 @@ export class VersionService {
     private readonly versionRepository: Repository<AppVersionEntity>,
     @InjectRepository(AppPackageEntity)
     private readonly packageRepository: Repository<AppPackageEntity>,
-    @InjectRepository(AppEntity)
-    private readonly appRepository: Repository<AppEntity>,
     @InjectRepository(AppChannelEntity)
     private readonly channelRepository: Repository<AppChannelEntity>,
     @Inject(STORAGE_SERVICE)
     private readonly storageService: StorageService,
+    private readonly appService: AppService,
   ) {}
 
-  /** 分页查询（按应用必选过滤，通道 / 状态可选） */
-  async getPage(appId: string, dto: VersionPageDto): Promise<PageResult<VersionVo>> {
+  /** 分页查询（按应用必选过滤，通道 / 状态可选；路径 :id 即 appId，先做数据范围校验） */
+  async getPage(appId: string, dto: VersionPageDto, userId: string): Promise<PageResult<VersionVo>> {
+    await this.appService.assertAccessible(userId, appId)
     const where: FindOptionsWhere<AppVersionEntity> = { appId }
     if (dto.channelId !== undefined)
       where.channelId = dto.channelId
@@ -63,8 +64,8 @@ export class VersionService {
   }
 
   /** 创建 draft 版本：semver 校验 + 通道归属校验 + 通道内查重（含软删历史，设计 §4.6） */
-  async create(appId: string, dto: VersionCreateDto): Promise<string> {
-    await this.getExistsApp(appId)
+  async create(appId: string, dto: VersionCreateDto, userId: string): Promise<string> {
+    await this.appService.assertAccessible(userId, appId)
     const channel = await this.getExistsChannel(appId, dto.channelId)
     this.assertSemver(dto.version)
     await this.assertVersionAvailable(appId, channel.id, dto.version)
@@ -83,8 +84,9 @@ export class VersionService {
   }
 
   /** 编辑：draft 任意编辑；published 仅 notes / forceUpdate；offline 终态一律拒绝（设计 §3.2） */
-  async update(dto: VersionUpdateDto): Promise<void> {
+  async update(dto: VersionUpdateDto, userId: string): Promise<void> {
     const version = await this.getExistsVersion(dto.id)
+    await this.appService.assertAccessible(userId, version.appId)
     if (version.status === VERSION_STATUS.OFFLINE) {
       throw businessError('已下线版本为终态，不可编辑（重新发布请新建版本）', {
         code: AppcenterErrorCode.VERSION_STATUS_FORBIDDEN,
@@ -113,8 +115,9 @@ export class VersionService {
   }
 
   /** 删除版本：仅 draft 可删，连带软删包记录并同步清理 OSS 对象（含 blockmap） */
-  async remove(id: string): Promise<void> {
+  async remove(id: string, userId: string): Promise<void> {
     const version = await this.getExistsVersion(id)
+    await this.appService.assertAccessible(userId, version.appId)
     if (version.status !== VERSION_STATUS.DRAFT) {
       throw businessError('仅草稿版本允许删除（已发布版本先下线，下线版本保留历史）', {
         code: AppcenterErrorCode.VERSION_STATUS_FORBIDDEN,
@@ -129,12 +132,12 @@ export class VersionService {
   }
 
   /** 发布：draft → published（前置校验：至少一个包记录（纯 web 应用除外）/ 通道内无已发布同号 / 框架产物完整） */
-  async publish(id: string): Promise<void> {
+  async publish(id: string, userId: string): Promise<void> {
     const version = await this.getExistsVersion(id)
+    const app = await this.appService.assertAccessible(userId, version.appId)
     if (version.status !== VERSION_STATUS.DRAFT) {
       throw businessError('仅草稿版本允许发布', { code: AppcenterErrorCode.VERSION_STATUS_FORBIDDEN })
     }
-    const app = await this.getExistsApp(version.appId)
     const packages = await this.packageRepository.find({ where: { versionId: id } })
 
     // 前置校验一：至少挂一个包记录（web 平台无包记录、ios 仅登记元信息——存在记录即视为已上传完成；
@@ -165,8 +168,9 @@ export class VersionService {
   }
 
   /** 下线：published → offline（终态；下线后客户端更新检测不再返回该版本） */
-  async offline(id: string): Promise<void> {
+  async offline(id: string, userId: string): Promise<void> {
     const version = await this.getExistsVersion(id)
+    await this.appService.assertAccessible(userId, version.appId)
     if (version.status !== VERSION_STATUS.PUBLISHED) {
       throw businessError('仅已发布版本允许下线', { code: AppcenterErrorCode.VERSION_STATUS_FORBIDDEN })
     }
@@ -286,17 +290,6 @@ export class VersionService {
       })
     }
     return version
-  }
-
-  /** 按主键查应用：不存在抛 APP_NOT_EXISTS */
-  private async getExistsApp(id: string): Promise<AppEntity> {
-    const app = await this.appRepository.findOne({ where: { id } })
-    if (!app) {
-      throw businessError(AppcenterErrorCode.APP_NOT_EXISTS.message, {
-        code: AppcenterErrorCode.APP_NOT_EXISTS,
-      })
-    }
-    return app
   }
 
   /** 按主键查应用内通道：不存在（含跨应用）抛 CHANNEL_NOT_EXISTS */

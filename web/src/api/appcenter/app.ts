@@ -26,6 +26,13 @@ export interface AppVO {
   createTime: number
 }
 
+/** 应用精简信息（授权弹窗与订阅页应用筛选的数据源，仅含当前用户可管理应用） */
+export interface AppOptionVO {
+  id: string
+  appKey: string
+  name: string
+}
+
 /** 应用完整凭证：仅注册 / 重置 Secret 后返回一次（之后不可再查） */
 export interface AppCredentialVO {
   id: string
@@ -66,6 +73,14 @@ export interface AppPageParam extends Partial<PageParam> {
 export async function getAppPage(params: AppPageParam): Promise<PageResult<AppVO>> {
   const { data } = await http.get<PageResult<AppVO>>('/appcenter/app', { params })
   return data
+}
+
+/** 当前用户可管理的应用精简列表（后端按 appcenter 域数据范围收窄；keyword 匹配名称 / AppKey） */
+export async function getAppOptions(keyword?: string): Promise<AppOptionVO[]> {
+  const { data } = await http.get<AppOptionVO[]>('/appcenter/app/options', {
+    params: { keyword: keyword || undefined },
+  })
+  return data!
 }
 
 export async function getApp(id: string): Promise<AppVO> {

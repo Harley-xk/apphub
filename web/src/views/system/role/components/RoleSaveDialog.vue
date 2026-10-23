@@ -27,6 +27,19 @@
       <el-form-item label="显示排序" prop="sort">
         <el-input-number v-model="form.sort" :min="0" :max="9999" />
       </el-form-item>
+      <el-form-item label="数据范围">
+        <el-radio-group v-model="form.dataScope">
+          <el-radio value="all">
+            全部应用
+          </el-radio>
+          <el-radio value="app">
+            按应用
+          </el-radio>
+        </el-radio-group>
+        <div class="form-hint">
+          按应用：仅能操作账户被授权的应用（appcenter / subscription），未授权即不可见
+        </div>
+      </el-form-item>
       <el-form-item v-if="form.id" label="启用状态">
         <el-switch v-model="form.status" />
       </el-form-item>
@@ -69,6 +82,8 @@ const form = reactive({
   name: '',
   code: '',
   sort: 0,
+  /** 数据范围：all 全部应用 / app 按应用收窄 */
+  dataScope: 'all',
   remark: '',
   status: true,
 })
@@ -89,6 +104,7 @@ function open(role?: RoleVO): void {
     form.name = role.name
     form.code = role.code
     form.sort = role.sort
+    form.dataScope = role.dataScope ?? 'all'
     form.remark = role.remark ?? ''
     form.status = role.status
   }
@@ -100,6 +116,7 @@ function resetForm(): void {
   form.name = ''
   form.code = ''
   form.sort = 0
+  form.dataScope = 'all'
   form.remark = ''
   form.status = true
 }
@@ -117,6 +134,7 @@ async function handleSubmit(): Promise<void> {
         name: form.name,
         status: form.status,
         sort: form.sort,
+        dataScope: form.dataScope,
         remark: form.remark || undefined,
       })
       ElMessage.success('修改成功')
@@ -126,6 +144,7 @@ async function handleSubmit(): Promise<void> {
         name: form.name,
         code: form.code,
         sort: form.sort,
+        dataScope: form.dataScope,
         remark: form.remark || undefined,
       })
       ElMessage.success('新增成功')
@@ -140,3 +159,12 @@ async function handleSubmit(): Promise<void> {
 
 defineExpose({ open })
 </script>
+
+<style scoped>
+.form-hint {
+  margin-top: 4px;
+  color: var(--apphub-text-secondary, #909399);
+  font-size: 12px;
+  line-height: 1.5;
+}
+</style>

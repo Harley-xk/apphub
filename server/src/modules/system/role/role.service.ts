@@ -16,7 +16,7 @@ import { RoleEntity } from '../entities/role.entity'
 import { UserRoleEntity } from '../entities/user-role.entity'
 import { SystemErrorCode } from '../error-codes'
 import { PermissionRegistry } from '../permissions'
-import { SUPER_ADMIN_ROLE_CODE, SUPER_ADMIN_ROLE_ID } from '../system.constants'
+import { DATA_SCOPE_ALL, SUPER_ADMIN_ROLE_CODE, SUPER_ADMIN_ROLE_ID } from '../system.constants'
 import type { RoleCreateDto, RoleDetailVo, RolePageDto, RoleUpdateDto, RoleVo } from './dto/role.dto'
 
 @Injectable()
@@ -79,6 +79,7 @@ export class RoleService {
         name: dto.name,
         code: dto.code,
         sort: dto.sort ?? 0,
+        dataScope: dto.dataScope ?? DATA_SCOPE_ALL,
         remark: dto.remark ?? null,
       }),
     )
@@ -92,6 +93,7 @@ export class RoleService {
     role.name = dto.name
     role.status = dto.status
     role.sort = dto.sort ?? role.sort
+    role.dataScope = dto.dataScope ?? role.dataScope
     role.remark = dto.remark ?? null
     await this.roleRepository.save(role)
   }
@@ -162,6 +164,7 @@ export class RoleService {
       code: role.code,
       sort: role.sort,
       status: role.status,
+      dataScope: role.dataScope,
       remark: role.remark,
       createTime: role.createTime,
     }

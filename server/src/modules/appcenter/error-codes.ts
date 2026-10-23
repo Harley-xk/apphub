@@ -22,6 +22,11 @@ export const AppcenterErrorCode = {
   APP_DISABLED: new ErrorCode(300100003, '应用已停用'),
   /** 应用存在已发布版本，不允许删除 */
   APP_HAS_PUBLISHED_VERSION: new ErrorCode(300100004, '应用存在已发布版本，不允许删除，请先下线版本'),
+  /**
+   * 无权操作该应用（应用级数据范围）：单资源越权与列表显式查询未授权应用统一使用该码。
+   * 码值归 appcenter 模块段（应用管理员与数据范围设计 §7.5），subscription 域复用同码。
+   */
+  APP_SCOPE_FORBIDDEN: new ErrorCode(300100005, '无权操作该应用'),
   // ===== 子域 002：通道 =====
   /** 通道不存在 */
   CHANNEL_NOT_EXISTS: new ErrorCode(300200001, '通道不存在'),

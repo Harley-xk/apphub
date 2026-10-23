@@ -1,4 +1,4 @@
-import { describe, expect, it } from '@jest/globals'
+import { describe, expect, it, jest } from '@jest/globals'
 
 import type { AppChannelEntity } from '../entities/app-channel.entity'
 import { AppcenterErrorCode } from '../error-codes'
@@ -39,46 +39,52 @@ function makeService(options: { channels?: ChannelRow[] } = {}) {
       return Promise.resolve(entity)
     },
   }
-  const service = new ChannelService(channelRepository as never)
-  return { service, findOneOptions, getSoftRemovedCount: () => softRemovedCount }
+  // 应用可达性由 AppService.assertAccessible 统一校验（存在性 + 数据范围），此处只验证委托调用
+  const assertAccessible = jest.fn(() => Promise.resolve({ id: 'a1' }))
+  const service = new ChannelService(channelRepository as never, { assertAccessible } as never)
+  return { service, findOneOptions, assertAccessible, getSoftRemovedCount: () => softRemovedCount }
 }
+
+const USER_ID = 'u-1'
 
 const STABLE: ChannelRow = { id: 'c1', appId: 'a1', code: 'stable', name: '稳定版', status: 'enabled', sort: 0 }
 const BETA: ChannelRow = { id: 'c2', appId: 'a1', code: 'beta', name: '公测版', status: 'enabled', sort: 1 }
 
 describe('ChannelService', () => {
   it('创建通道 code 撞软删历史应拒绝（查重必须含已删行）', async () => {
-    const { service, findOneOptions } = makeService({ channels: [{ ...BETA, deletedAt: new Date() }] })
+    const { service, findOneOptions, assertAccessible } = makeService({ channels: [{ ...BETA, deletedAt: new Date() }] })
     await expect(
-      service.create('a1', { code: 'beta', name: '新版公测' }),
+      service.create('a1', { code: 'beta', name: '新版公测' }, USER_ID),
     ).rejects.toMatchObject({ code: AppcenterErrorCode.CHANNEL_CODE_DUPLICATE.code })
     // 契约守护：查重 findOne 收到 withDeleted: true
     expect(findOneOptions.some(option => option.withDeleted === true)).toBe(true)
+    // 契约守护：路径 :id 即 appId，通道操作前必须完成应用可达性（含数据范围）校验
+    expect(assertAccessible).toHaveBeenCalledWith(USER_ID, 'a1')
   })
 
   it('应用内 code 不冲突时创建成功（跨应用同 code 不受影响）', async () => {
     const { service } = makeService({ channels: [{ ...BETA, appId: 'a2' }] })
     await expect(
-      service.create('a1', { code: 'beta', name: '公测版' }),
+      service.create('a1', { code: 'beta', name: '公测版' }, USER_ID),
     ).resolves.toBe('c-new')
   })
 
   it('stable 通道不允许删除（主张 A1：客户端默认通道保障）', async () => {
     const { service } = makeService({ channels: [STABLE] })
-    await expect(service.remove('a1', 'c1')).rejects.toMatchObject({
+    await expect(service.remove('a1', 'c1', USER_ID)).rejects.toMatchObject({
       code: AppcenterErrorCode.STABLE_CHANNEL_UNREMOVABLE.code,
     })
   })
 
   it('非 stable 通道删除走软删', async () => {
     const { service, getSoftRemovedCount } = makeService({ channels: [STABLE, BETA] })
-    await expect(service.remove('a1', 'c2')).resolves.toBeUndefined()
+    await expect(service.remove('a1', 'c2', USER_ID)).resolves.toBeUndefined()
     expect(getSoftRemovedCount()).toBe(1)
   })
 
   it('通道不存在（含跨应用访问）应抛 CHANNEL_NOT_EXISTS', async () => {
     const { service } = makeService({ channels: [BETA] })
-    await expect(service.update('a1', 'ghost', { name: '改名' })).rejects.toMatchObject({
+    await expect(service.update('a1', 'ghost', { name: '改名' }, USER_ID)).rejects.toMatchObject({
       code: AppcenterErrorCode.CHANNEL_NOT_EXISTS.code,
     })
   })

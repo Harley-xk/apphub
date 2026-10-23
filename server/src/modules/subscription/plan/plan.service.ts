@@ -13,6 +13,7 @@ import { businessError } from '../../../common/exceptions/business-error'
 import type { PageResult } from '../../../common/interfaces/page-result.interface'
 import { AppEntity } from '../../appcenter/entities/app.entity'
 import { AppcenterErrorCode } from '../../appcenter/error-codes'
+import { AppScopeService } from '../../system/app-scope/app-scope.service'
 import { SubPlanEntity } from '../entities/sub-plan.entity'
 import { SubscriptionErrorCode } from '../error-codes'
 import { PERIOD_MONTHS, PLAN_STATUS, type PeriodType } from '../subscription.constants'
@@ -24,13 +25,23 @@ export class PlanService {
     private readonly planRepository: Repository<SubPlanEntity>,
     @InjectRepository(AppEntity)
     private readonly appRepository: Repository<AppEntity>,
+    private readonly appScopeService: AppScopeService,
   ) {}
 
-  /** 计划分页列表（应用 / 关键字 / 状态筛选，带应用名回显） */
-  async getPage(dto: PlanPageDto): Promise<PageResult<PlanVo>> {
+  /** 计划分页列表（应用 / 关键字 / 状态筛选，带应用名回显；按订阅域数据范围收窄） */
+  async getPage(dto: PlanPageDto, userId: string): Promise<PageResult<PlanVo>> {
+    const scopeAppIds = await this.appScopeService.getListAppIds(userId, 'subscription')
     const where: FindOptionsWhere<SubPlanEntity> = {}
-    if (dto.appId)
+    if (dto.appId) {
+      // 显式查询未授权应用：403 而非空页（便于排障，设计 §7.4）
+      this.appScopeService.assertListAppId(dto.appId, scopeAppIds)
       where.appId = dto.appId
+    }
+    else if (scopeAppIds !== null) {
+      if (scopeAppIds.length === 0)
+        return { list: [], total: 0 }
+      where.appId = In(scopeAppIds)
+    }
     if (dto.keyword)
       where.name = Like(`%${dto.keyword}%`)
     if (dto.status)
@@ -45,9 +56,10 @@ export class PlanService {
     return { list: list.map(plan => this.toVo(plan, appMap)), total }
   }
 
-  /** 新建计划（durationMonths 按档位服务端映射，不信任前端） */
-  async create(dto: CreatePlanDto): Promise<string> {
+  /** 新建计划（durationMonths 按档位服务端映射，不信任前端；应用须在订阅域数据范围内） */
+  async create(dto: CreatePlanDto, userId: string): Promise<string> {
     await this.getExistsApp(dto.appId)
+    await this.appScopeService.assertAppAllowed(userId, dto.appId, 'subscription')
     const plan = await this.planRepository.save(
       this.planRepository.create({
         appId: dto.appId,
@@ -65,8 +77,9 @@ export class PlanService {
   }
 
   /** 编辑计划（改名 / 改价只影响此后新订单，历史订单与对账不受影响——快照设计 §4.3） */
-  async update(id: string, dto: UpdatePlanDto): Promise<void> {
+  async update(id: string, dto: UpdatePlanDto, userId: string): Promise<void> {
     const plan = await this.getExistsPlan(id)
+    await this.appScopeService.assertAppAllowed(userId, plan.appId, 'subscription')
     plan.name = dto.name
     plan.periodType = dto.periodType
     plan.durationMonths = this.mapDurationMonths(dto.periodType)
@@ -79,8 +92,9 @@ export class PlanService {
   }
 
   /** 删除计划（软删；存量订阅不受影响，订单侧以快照引用） */
-  async remove(id: string): Promise<void> {
-    await this.getExistsPlan(id)
+  async remove(id: string, userId: string): Promise<void> {
+    const plan = await this.getExistsPlan(id)
+    await this.appScopeService.assertAppAllowed(userId, plan.appId, 'subscription')
     await this.planRepository.softDelete(id)
   }
 

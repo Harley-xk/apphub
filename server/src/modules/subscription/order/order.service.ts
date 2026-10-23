@@ -17,6 +17,7 @@ import { AppEntity } from '../../appcenter/entities/app.entity'
 import type { AuthMember } from '../../member/auth/current-member.decorator'
 import { MemberEntity } from '../../member/entities/member.entity'
 import { MemberErrorCode } from '../../member/error-codes'
+import { AppScopeService } from '../../system/app-scope/app-scope.service'
 import { OrderEntity } from '../entities/order.entity'
 import { SubPlanEntity } from '../entities/sub-plan.entity'
 import { SubscriptionEntity } from '../entities/subscription.entity'
@@ -62,14 +63,23 @@ export class OrderService {
     @Inject(PAYMENT_PROVIDERS)
     private readonly providerRegistry: PaymentProviderRegistry,
     private readonly queryThrottle: PayQueryThrottleService,
+    private readonly appScopeService: AppScopeService,
   ) {}
 
-  /** 订单分页列表（先惰性关单再查询，渠道 / 状态 / 应用 / 会员 / 订单号筛选） */
-  async getPage(dto: OrderPageDto): Promise<PageResult<OrderVo>> {
+  /** 订单分页列表（先惰性关单再查询，渠道 / 状态 / 应用 / 会员 / 订单号筛选；按订阅域数据范围收窄） */
+  async getPage(dto: OrderPageDto, userId: string): Promise<PageResult<OrderVo>> {
     await this.closeExpiredPending()
+    const scopeAppIds = await this.appScopeService.getListAppIds(userId, 'subscription')
     const where: FindOptionsWhere<OrderEntity> = {}
-    if (dto.appId)
+    if (dto.appId) {
+      this.appScopeService.assertListAppId(dto.appId, scopeAppIds)
       where.appId = dto.appId
+    }
+    else if (scopeAppIds !== null) {
+      if (scopeAppIds.length === 0)
+        return { list: [], total: 0 }
+      where.appId = In(scopeAppIds)
+    }
     if (dto.memberId)
       where.memberId = dto.memberId
     if (dto.channel)
@@ -90,13 +100,15 @@ export class OrderService {
   }
 
   /** 线下收款备案：创建 channel=offline 订单并直接标记 paid，事务内即时顺延订阅（设计 §3.3） */
-  async createOfflineOrder(dto: OfflineCreateDto): Promise<OrderVo> {
+  async createOfflineOrder(dto: OfflineCreateDto, userId: string): Promise<OrderVo> {
     const plan = await this.planRepository.findOne({ where: { id: dto.planId } })
     if (!plan) {
       throw businessError(SubscriptionErrorCode.PLAN_NOT_EXISTS.message, {
         code: SubscriptionErrorCode.PLAN_NOT_EXISTS,
       })
     }
+    // 备案落单的应用须在订阅域数据范围内（订单 appId 由计划带出）
+    await this.appScopeService.assertAppAllowed(userId, plan.appId, 'subscription')
     if (plan.status !== PLAN_STATUS.ON) {
       throw businessError(SubscriptionErrorCode.PLAN_OFF_SHELF.message, {
         code: SubscriptionErrorCode.PLAN_OFF_SHELF,
@@ -230,8 +242,9 @@ export class OrderService {
   }
 
   /** 手动关闭待支付订单（关单前查单防护「已付被关」，附录 §6 / PY4；paid / closed 一律拒绝） */
-  async closeOrder(id: string): Promise<void> {
+  async closeOrder(id: string, userId: string): Promise<void> {
     const order = await this.getExistsOrder(id)
+    await this.appScopeService.assertAppAllowed(userId, order.appId, 'subscription')
     if (order.status !== ORDER_STATUS.PENDING) {
       throw businessError(SubscriptionErrorCode.ORDER_STATUS_CONFLICT.message, {
         code: SubscriptionErrorCode.ORDER_STATUS_CONFLICT,

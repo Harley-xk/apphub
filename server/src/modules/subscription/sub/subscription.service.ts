@@ -13,6 +13,7 @@ import type { IntrospectSubscriptionVo, SubscriptionPageDto, SubscriptionVo } fr
 import type { PageResult } from '../../../common/interfaces/page-result.interface'
 import { AppEntity } from '../../appcenter/entities/app.entity'
 import { MemberEntity } from '../../member/entities/member.entity'
+import { AppScopeService } from '../../system/app-scope/app-scope.service'
 import { SubPlanEntity } from '../entities/sub-plan.entity'
 import { SubscriptionEntity } from '../entities/subscription.entity'
 import { isPermanentExpire } from '../subscription-period'
@@ -36,13 +37,22 @@ export class SubscriptionService {
     private readonly memberRepository: Repository<MemberEntity>,
     @InjectRepository(AppEntity)
     private readonly appRepository: Repository<AppEntity>,
+    private readonly appScopeService: AppScopeService,
   ) {}
 
-  /** 实例分页列表（应用 / 会员 / 状态筛选；状态由查询层按时间打标，S2） */
-  async getPage(dto: SubscriptionPageDto): Promise<PageResult<SubscriptionVo>> {
+  /** 实例分页列表（应用 / 会员 / 状态筛选；状态由查询层按时间打标，S2；按订阅域数据范围收窄） */
+  async getPage(dto: SubscriptionPageDto, userId: string): Promise<PageResult<SubscriptionVo>> {
+    const scopeAppIds = await this.appScopeService.getListAppIds(userId, 'subscription')
     const where: FindOptionsWhere<SubscriptionEntity> = {}
-    if (dto.appId)
+    if (dto.appId) {
+      this.appScopeService.assertListAppId(dto.appId, scopeAppIds)
       where.appId = dto.appId
+    }
+    else if (scopeAppIds !== null) {
+      if (scopeAppIds.length === 0)
+        return { list: [], total: 0 }
+      where.appId = In(scopeAppIds)
+    }
     if (dto.memberId)
       where.memberId = dto.memberId
     if (dto.state === 'active')

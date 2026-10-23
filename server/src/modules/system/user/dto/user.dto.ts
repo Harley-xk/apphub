@@ -20,6 +20,7 @@ import {
 } from 'class-validator'
 
 import { PageParamDto } from '../../../../common/dto/page.dto'
+import type { AppOptionVo } from '../../app-scope/app-lookup.port'
 
 /** 用户列表出参（不回传口令散列；部门 / 岗位为批量补全的冗余展示字段） */
 export interface UserVo {
@@ -125,6 +126,21 @@ export class UserResetPasswordDto {
   @ApiProperty({ description: '用户 id' })
   @IsUUID()
   id: string
+}
+
+/** 用户应用授权出参：appIds 为授权集合，apps 为未软删应用的精简信息回显 */
+export interface UserAppScopeVo {
+  appIds: string[]
+  apps: AppOptionVo[]
+}
+
+export class UserAssignAppScopeDto {
+  @ApiProperty({ description: '应用 id 全集（差集增量绑定；空数组即解除全部授权）', type: [String] })
+  @IsArray()
+  @ArrayUnique({ message: '应用 id 不得重复' })
+  @ArrayMaxSize(500)
+  @IsUUID(undefined, { each: true })
+  appIds: string[]
 }
 
 export class UserAssignRoleDto {

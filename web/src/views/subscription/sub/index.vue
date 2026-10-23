@@ -79,7 +79,7 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
 
-import { getAppPage } from '@/api/appcenter/app'
+import { getAppOptions } from '@/api/appcenter/app'
 import { periodTypeText } from '@/api/subscription/plan'
 import type { SubscriptionVO } from '@/api/subscription/sub'
 import {
@@ -123,9 +123,10 @@ onMounted(() => {
   loadTable()
 })
 
+/** 应用下拉改用精简选项接口：后端按 appcenter 域数据范围收窄，天然只含授权应用 */
 async function loadApps(): Promise<void> {
-  const page = await getAppPage({ pageNo: 1, pageSize: 100 })
-  appOptions.value = page.list.map(app => ({ id: app.id, name: app.name }))
+  const options = await getAppOptions()
+  appOptions.value = options.map(app => ({ id: app.id, name: app.name }))
 }
 
 async function loadTable(): Promise<void> {

@@ -7,6 +7,8 @@
 import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common'
 import { ApiOperation, ApiTags } from '@nestjs/swagger'
 
+import { CurrentUser } from '../../../common/decorators/current-user.decorator'
+import type { AuthUser } from '../../../common/decorators/current-user.decorator'
 import { OperateLog } from '../../../common/decorators/operate-log.decorator'
 import { RequirePermissions } from '../../system/permissions'
 import { APPCENTER_PERMISSION_CODES } from '../permissions'
@@ -23,31 +25,43 @@ export class PackageController {
   @ApiOperation({ summary: '版本下包记录列表' })
   @RequirePermissions(APPCENTER_PERMISSION_CODES.VERSION_QUERY)
   @Get()
-  async list(@Param('id') versionId: string): Promise<PackageVo[]> {
-    return this.packageService.list(versionId)
+  async list(@Param('id') versionId: string, @CurrentUser() user: AuthUser): Promise<PackageVo[]> {
+    return this.packageService.list(versionId, user.id)
   }
 
   @ApiOperation({ summary: '签发 STS 直传凭证（对象键后端生成，policy 收敛精确键 PutObject）' })
   @OperateLog('应用管理', '申请包上传凭证')
   @RequirePermissions(APPCENTER_PERMISSION_CODES.VERSION_UPDATE)
   @Post('upload-token')
-  async issueUploadToken(@Param('id') versionId: string, @Body() dto: PackageUploadTokenDto): Promise<PackageUploadTokenVo> {
-    return this.packageService.issueUploadToken(versionId, dto)
+  async issueUploadToken(
+    @Param('id') versionId: string,
+    @Body() dto: PackageUploadTokenDto,
+    @CurrentUser() user: AuthUser,
+  ): Promise<PackageUploadTokenVo> {
+    return this.packageService.issueUploadToken(versionId, dto, user.id)
   }
 
   @ApiOperation({ summary: '登记包记录（HeadObject 校验，file_size 以服务端为准）' })
   @OperateLog('应用管理', '登记安装包')
   @RequirePermissions(APPCENTER_PERMISSION_CODES.VERSION_UPDATE)
   @Post()
-  async register(@Param('id') versionId: string, @Body() dto: PackageRegisterDto): Promise<string> {
-    return this.packageService.register(versionId, dto)
+  async register(
+    @Param('id') versionId: string,
+    @Body() dto: PackageRegisterDto,
+    @CurrentUser() user: AuthUser,
+  ): Promise<string> {
+    return this.packageService.register(versionId, dto, user.id)
   }
 
   @ApiOperation({ summary: '删除包（仅草稿版本，连带清理 OSS 对象）' })
   @OperateLog('应用管理', '删除安装包')
   @RequirePermissions(APPCENTER_PERMISSION_CODES.VERSION_UPDATE)
   @Delete(':pkgId')
-  async remove(@Param('id') versionId: string, @Param('pkgId') pkgId: string): Promise<void> {
-    await this.packageService.remove(versionId, pkgId)
+  async remove(
+    @Param('id') versionId: string,
+    @Param('pkgId') pkgId: string,
+    @CurrentUser() user: AuthUser,
+  ): Promise<void> {
+    await this.packageService.remove(versionId, pkgId, user.id)
   }
 }

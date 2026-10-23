@@ -2,7 +2,7 @@
   作者: Harley-xk
   创建: 2026-10-16
 
-  描述: 应用管理页：搜索分页 + 注册（凭证仅此一次）/ 编辑 / 启停 / 重置凭证 / 删除 / 通道抽屉
+  描述: 应用管理页：搜索分页 + 注册 / 编辑 / 启停 / 查看与重置凭证 / 删除 / 通道抽屉
 -->
 <template>
   <div class="page-container">
@@ -71,6 +71,14 @@
         <template #appKey="{ row }">
           <code class="app-key">{{ row.appKey }}</code>
         </template>
+        <!-- 列表恒为掩码：完整值经独立端点按需拉取（不随列表响应下发） -->
+        <template #appSecret="{ row }">
+          <el-tooltip content="点击查看完整 AppSecret" placement="top">
+            <el-button link type="primary" class="secret-mask" @click="openSecret(row)">
+              ****
+            </el-button>
+          </el-tooltip>
+        </template>
         <template #framework="{ row }">
           {{ row.framework ? FRAMEWORK_LABELS[row.framework] ?? row.framework : '-' }}
         </template>
@@ -88,36 +96,41 @@
           <el-button v-hasPermi="'appcenter:app:update'" link type="primary" @click="openUpdate(row)">
             编辑
           </el-button>
+          <el-button
+            v-hasPermi="'appcenter:channel:query'"
+            link
+            type="primary"
+            @click="openChannelDrawer(row)"
+          >
+            更新通道
+          </el-button>
           <el-button v-hasPermi="'appcenter:version:query'" link type="primary" @click="goVersion(row)">
             版本
           </el-button>
-          <!-- 下拉项为组件（非元素根节点），不用 v-hasPermi（指令会在其非元素根上告警并破坏渲染），改用权限计算属性 -->
-          <el-dropdown
-            v-if="hasMoreActions"
-            class="action-more"
-            trigger="click"
-            @command="(command: string) => handleMoreCommand(command, row)"
+          <el-button
+            v-hasPermi="'appcenter:app:reset-secret'"
+            link
+            type="primary"
+            @click="handleResetSecret(row)"
           >
-            <el-button link type="primary">
-              更多
-            </el-button>
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item v-if="canQueryChannel" command="channel">
-                  更新通道
-                </el-dropdown-item>
-                <el-dropdown-item v-if="canResetSecret" command="reset-secret">
-                  重置凭证
-                </el-dropdown-item>
-                <el-dropdown-item v-if="canToggleStatus" command="toggle-status">
-                  {{ row.status === 'enabled' ? '停用应用' : '启用应用' }}
-                </el-dropdown-item>
-                <el-dropdown-item v-if="canRemoveApp" command="remove" divided>
-                  删除应用
-                </el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
+            重置凭证
+          </el-button>
+          <el-button
+            v-hasPermi="'appcenter:app:toggle-status'"
+            link
+            type="primary"
+            @click="handleToggleStatus(row)"
+          >
+            {{ row.status === 'enabled' ? '停用应用' : '启用应用' }}
+          </el-button>
+          <el-button
+            v-hasPermi="'appcenter:app:remove'"
+            link
+            type="danger"
+            @click="handleDelete(row)"
+          >
+            删除应用
+          </el-button>
         </template>
       </ApphubTable>
 
@@ -141,14 +154,13 @@
 
 <script setup lang="ts">
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { computed, onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import type { AppCredentialVO, AppVO } from '@/api/appcenter/app'
-import { deleteApp, getAppPage, resetAppSecret, updateAppStatus } from '@/api/appcenter/app'
+import { deleteApp, getAppPage, getAppSecret, resetAppSecret, updateAppStatus } from '@/api/appcenter/app'
 import ApphubTable from '@/components/ApphubTable/index.vue'
 import type { ApphubTableColumn } from '@/components/ApphubTable/types'
-import { useAuthStore } from '@/stores/auth'
 import { dateTimeFormatter } from '@/utils/format'
 import AppChannelDrawer from '@/views/appcenter/app/components/AppChannelDrawer.vue'
 import AppCredentialDialog from '@/views/appcenter/app/components/AppCredentialDialog.vue'
@@ -158,17 +170,6 @@ import AppSaveDialog from '@/views/appcenter/app/components/AppSaveDialog.vue'
 defineOptions({ name: 'AppcenterApp' })
 
 const router = useRouter()
-const auth = useAuthStore()
-
-// 操作列「更多」菜单项的权限判定（数据范围外的通用操作由后端 403 兜底）
-const canQueryChannel = computed(() => auth.hasPermission('appcenter:channel:query'))
-const canResetSecret = computed(() => auth.hasPermission('appcenter:app:reset-secret'))
-const canToggleStatus = computed(() => auth.hasPermission('appcenter:app:toggle-status'))
-const canRemoveApp = computed(() => auth.hasPermission('appcenter:app:remove'))
-/** 四项全部无权限时整个「更多」入口不渲染（避免空弹层） */
-const hasMoreActions = computed(() =>
-  canQueryChannel.value || canResetSecret.value || canToggleStatus.value || canRemoveApp.value,
-)
 
 /** 形态标签展示映射（后端取值域 desktop / web / mobile） */
 const APP_TYPE_LABELS: Record<string, string> = {
@@ -188,11 +189,14 @@ const FRAMEWORK_LABELS: Record<string, string> = {
 const columns: ApphubTableColumn[] = [
   { field: 'name', title: '应用名称', minWidth: 200, slot: 'name' },
   { field: 'appKey', title: 'AppKey', width: 200, slot: 'appKey' },
+  { field: 'appSecret', title: 'AppSecret', width: 120, slot: 'appSecret' },
   { field: 'framework', title: '技术框架', width: 110, slot: 'framework' },
   { field: 'clientType', title: '调用方类型', width: 120, slot: 'clientType' },
   { field: 'status', title: '状态', width: 80, slot: 'status' },
   { field: 'sort', title: '排序', width: 70 },
   { field: 'createTime', title: '创建时间', minWidth: 170, formatter: dateTimeFormatter },
+  // 六个动作平铺由 RowActions 收纳；列宽保持 200px（加宽会把表格总宽推出视口，vxe 拆 fixed 操作列
+  // 为独立 wrapper，行内定位不到按钮），把高频的「更新通道」排在第二位保证直见
   { field: 'action', title: '操作', width: 200, fixed: 'right', slot: 'action' },
 ]
 
@@ -268,9 +272,15 @@ function openUpdate(app: AppVO): void {
   saveDialogRef.value?.open(app)
 }
 
-/** 注册成功：AppSecret 仅此一次，立即弹凭证展示 */
+/** 注册成功：立即弹凭证展示（完整值此后可随时经列表点击查看） */
 function handleCreated(credential: AppCredentialVO): void {
   credentialDialogRef.value?.open(credential, 'created')
+}
+
+/** 点击列表 **** 掩码：按需拉取完整凭证后弹窗展示 */
+async function openSecret(app: AppVO): Promise<void> {
+  const credential = await getAppSecret(app.id)
+  credentialDialogRef.value?.open(credential, 'view')
 }
 
 function openChannelDrawer(app: AppVO): void {
@@ -280,18 +290,6 @@ function openChannelDrawer(app: AppVO): void {
 /** 进入版本下钻页（hidden 路由，query.appId 携带应用上下文） */
 function goVersion(app: AppVO): void {
   router.push({ path: '/appcenter/version', query: { appId: app.id } })
-}
-
-/** 操作列「更多」下拉分发 */
-function handleMoreCommand(command: string, app: AppVO): void {
-  if (command === 'channel')
-    openChannelDrawer(app)
-  else if (command === 'reset-secret')
-    handleResetSecret(app)
-  else if (command === 'toggle-status')
-    handleToggleStatus(app)
-  else if (command === 'remove')
-    handleDelete(app)
 }
 
 async function handleResetSecret(app: AppVO): Promise<void> {
@@ -361,5 +359,10 @@ async function handleDelete(app: AppVO): Promise<void> {
 .app-key {
   font-family: ui-monospace, SFMono-Regular, Consolas, 'Courier New', monospace;
   font-size: 13px;
+}
+
+.secret-mask {
+  font-family: ui-monospace, SFMono-Regular, Consolas, 'Courier New', monospace;
+  letter-spacing: 1px;
 }
 </style>

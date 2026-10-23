@@ -2,7 +2,7 @@
  * 作者: Harley-xk
  * 创建: 2026-10-16
  *
- * 描述: 应用中心应用接口封装：分页 / 注册（响应完整凭证仅此一次）/ 编辑 / 启停 / 凭证重置 / 删除
+ * 描述: 应用中心应用接口封装：分页 / 注册 / 详情 / 查看凭证 / 编辑 / 启停 / 凭证重置 / 删除
  */
 import type { PageParam, PageResult } from '@/api/http'
 import { http } from '@/api/http'
@@ -33,7 +33,7 @@ export interface AppOptionVO {
   name: string
 }
 
-/** 应用完整凭证：仅注册 / 重置 Secret 后返回一次（之后不可再查） */
+/** 应用完整凭证：查看凭证 / 注册 / 重置 Secret 共用（重置即旧凭证失效，D22） */
 export interface AppCredentialVO {
   id: string
   appKey: string
@@ -88,7 +88,13 @@ export async function getApp(id: string): Promise<AppVO> {
   return data!
 }
 
-/** 注册应用：响应完整凭证（AppSecret 仅此一次，D22） */
+/** 按需查看完整凭证（列表 AppSecret 列恒为 ****，点击时经此拉取；后端记操作日志） */
+export async function getAppSecret(id: string): Promise<AppCredentialVO> {
+  const { data } = await http.get<AppCredentialVO>(`/appcenter/app/${id}/secret`)
+  return data!
+}
+
+/** 注册应用：响应完整凭证 */
 export async function createApp(payload: AppCreateData): Promise<AppCredentialVO> {
   const { data } = await http.post<AppCredentialVO>('/appcenter/app', payload)
   return data!
@@ -102,7 +108,7 @@ export async function updateAppStatus(id: string, status: string): Promise<void>
   await http.put<null>(`/appcenter/app/${id}/status`, { status })
 }
 
-/** 重置 Secret：旧凭证立即失效，响应新完整凭证（仅此一次） */
+/** 重置 Secret：旧凭证立即失效，响应新完整凭证 */
 export async function resetAppSecret(id: string): Promise<AppCredentialVO> {
   const { data } = await http.put<AppCredentialVO>(`/appcenter/app/${id}/secret`)
   return data!

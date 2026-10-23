@@ -26,7 +26,7 @@ export function generateAppKey(): string {
   return `ah_${randomFromCharset(16)}`
 }
 
-/** 生成调用凭证：32 位随机串（明文存库，管理端仅创建 / 重置后完整显示一次，D22 重置即旧凭证失效） */
+/** 生成调用凭证：32 位随机串（明文存库，管理端列表掩码 + 点击按需查看；D22 重置即旧凭证失效） */
 export function generateAppSecret(): string {
   return randomFromCharset(32)
 }

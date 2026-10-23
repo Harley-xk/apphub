@@ -57,6 +57,20 @@ describe('OssStorageService', () => {
     expect(url).toMatch(/[?&]Signature=/)
   })
 
+  it('传入下载文件名时签名 URL 应携带 response-content-disposition（强制原始文件名下载）', () => {
+    const service = new OssStorageService(OPTIONS)
+    const url = service.signGetUrl('packages/app/stable/1.0.0/a.exe', 7200, '应用-1.3.0.exe')
+    // ASCII 兜底 + RFC 5987 UTF-8 双段文件名（中文无损还原，浏览器优先 filename*）
+    expect(decodeURIComponent(url)).toContain(
+      'response-content-disposition=attachment; filename="__-1.3.0.exe"; filename*=UTF-8\'\'%E5%BA%94%E7%94%A8-1.3.0.exe',
+    )
+  })
+
+  it('未传下载文件名时不注入 response-content-disposition（开放 API 下载地址保持原响应头）', () => {
+    const service = new OssStorageService(OPTIONS)
+    expect(service.signGetUrl('packages/app/stable/1.0.0/a.exe')).not.toContain('response-content-disposition')
+  })
+
   it('headObject 对象不存在应归一为 null（登记校验据此区分 003400004）', async () => {
     const service = makeServiceWithClient({
       head: () => Promise.reject(Object.assign(new Error('NoSuchKey'), { status: 404 })),

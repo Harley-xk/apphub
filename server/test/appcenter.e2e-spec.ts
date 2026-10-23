@@ -285,7 +285,7 @@ describe('AppcenterModule (e2e)', () => {
     await app.close()
   })
 
-  it('注册应用应响应完整凭证并预置 stable 通道（凭证仅此一次，主张 A1）', async () => {
+  it('注册应用应响应完整凭证并预置 stable 通道（主张 A1）', async () => {
     const res = await request(server)
       .post('/api/appcenter/app')
       .set('Authorization', `Bearer ${adminToken}`)
@@ -304,6 +304,13 @@ describe('AppcenterModule (e2e)', () => {
       .expect(200)
     const body = page.body as ApiResponse<PageResult<Record<string, unknown>>>
     expect(body.data?.list[0]?.appSecret).toBeUndefined()
+
+    // 完整凭证经独立端点按需查看（列表 **** 掩码的数据源，与注册响应一致）
+    const secretRes = await request(server)
+      .get(`/api/appcenter/app/${appId}/secret`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(200)
+    expect((secretRes.body as ApiResponse<{ appSecret: string }>).data?.appSecret).toBe(credential.appSecret)
 
     // 创建即预置 stable 通道
     const channelList = await request(server)
@@ -376,6 +383,12 @@ describe('AppcenterModule (e2e)', () => {
       .expect(forbidden)
     await request(server)
       .get(`/api/appcenter/app/${otherAppId}/channel`)
+      .set('Authorization', `Bearer ${appAdminToken}`)
+      .expect(403)
+      .expect(forbidden)
+    // 查看凭证同样受数据范围收口（不得借查看端点越权取 Secret）
+    await request(server)
+      .get(`/api/appcenter/app/${otherAppId}/secret`)
       .set('Authorization', `Bearer ${appAdminToken}`)
       .expect(403)
       .expect(forbidden)
@@ -522,7 +535,7 @@ describe('AppcenterModule (e2e)', () => {
       .get(`/api/appcenter/version/${versionId}/package`)
       .set('Authorization', `Bearer ${adminToken}`)
       .expect(200)
-    const pkgs = (packageList.body as ApiResponse<{ fileSize: number }[]>).data!
+    const pkgs = (packageList.body as ApiResponse<{ id: string, fileSize: number }[]>).data!
     expect(pkgs).toHaveLength(1)
     expect(pkgs[0]?.fileSize).toBe(1048576)
 
@@ -531,6 +544,25 @@ describe('AppcenterModule (e2e)', () => {
       .post(`/api/appcenter/version/${versionId}/publish`)
       .set('Authorization', `Bearer ${adminToken}`)
       .expect(200)
+
+    // 管理端下载：已发布版本的包也可签发签名 URL（下载不限版本状态）
+    const downloadRes = await request(server)
+      .get(`/api/appcenter/version/${versionId}/package/${pkgs[0].id}/download-url`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(200)
+    const download = (downloadRes.body as ApiResponse<{ url: string, fileName: string, expiresIn: number }>).data!
+    expect(download.url).toContain(expectedKey)
+    expect(download.fileName).toBe('app-setup-1.3.0.exe')
+    expect(download.expiresIn).toBe(7200)
+
+    // 包记录不存在（300400005）
+    await request(server)
+      .get(`/api/appcenter/version/${versionId}/package/ghost/download-url`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(400)
+      .expect((res) => {
+        expect((res.body as ApiResponse<unknown>).code).toBe(300400005)
+      })
 
     // published 仅允许改说明与强制标记（300300004）
     await request(server)

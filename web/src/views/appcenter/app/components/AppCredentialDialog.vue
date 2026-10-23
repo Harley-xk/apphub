@@ -2,20 +2,20 @@
   作者: Harley-xk
   创建: 2026-10-16
 
-  描述: 应用凭证展示弹窗：注册 / 重置 Secret 后的 AppKey + AppSecret 完整展示（仅此一次，附复制）
+  描述: 应用凭证展示弹窗：注册 / 重置 / 列表点击查看三处共用，展示 AppKey + AppSecret 完整值（附复制）
 -->
 <template>
   <el-dialog
     v-model="visible"
-    :title="mode === 'created' ? '应用凭证（请立即保存）' : '新凭证（请立即保存）'"
+    :title="TITLE_BY_MODE[mode]"
     width="560px"
     :close-on-click-modal="false"
   >
     <el-alert
-      type="warning"
+      :type="mode === 'reset' ? 'warning' : 'info'"
       :closable="false"
       show-icon
-      title="AppSecret 仅此一次展示，关闭后不可再查；重置前旧凭证立即失效"
+      :title="ALERT_BY_MODE[mode]"
     />
     <div class="credential-list">
       <div class="credential-item">
@@ -35,7 +35,7 @@
     </div>
     <template #footer>
       <el-button type="primary" @click="visible = false">
-        我已妥善保存
+        {{ mode === 'created' ? '我已妥善保存' : '关闭' }}
       </el-button>
     </template>
   </el-dialog>
@@ -47,14 +47,29 @@ import { ref } from 'vue'
 
 import type { AppCredentialVO } from '@/api/appcenter/app'
 
+/** 展示来源：注册成功 / 重置成功 / 列表点击查看 */
+type CredentialMode = 'created' | 'reset' | 'view'
+
+const TITLE_BY_MODE: Record<CredentialMode, string> = {
+  created: '应用凭证（请立即保存）',
+  reset: '新凭证（旧凭证已失效）',
+  view: '应用凭证',
+}
+
+const ALERT_BY_MODE: Record<CredentialMode, string> = {
+  created: 'AppSecret 可随时在应用列表中点击查看；重置会立即使旧 Secret 失效',
+  reset: '旧 Secret 已立即失效，使用旧凭证的调用方将无法调用开放 API，请尽快更新配置',
+  view: '凭证属于敏感信息，请勿外传；重置会立即使旧 Secret 失效',
+}
+
 const visible = ref(false)
 
-/** 展示上下文：来源（注册 / 重置）与完整凭证 */
+/** 展示上下文：来源与完整凭证 */
 const credential = ref<AppCredentialVO | null>(null)
-const mode = ref<'created' | 'reset'>('created')
+const mode = ref<CredentialMode>('created')
 
-/** 打开弹窗：仅注册 / 重置成功后调用（凭证不落任何持久层） */
-function open(value: AppCredentialVO, source: 'created' | 'reset'): void {
+/** 打开弹窗（凭证不落任何持久层） */
+function open(value: AppCredentialVO, source: CredentialMode): void {
   credential.value = value
   mode.value = source
   visible.value = true

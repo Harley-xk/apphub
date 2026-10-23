@@ -1,4 +1,4 @@
-// 全链路用例：应用中心分组、应用注册凭证（仅此一次展示）、通道抽屉（stable 保护）、
+// 全链路用例：应用中心分组、应用注册凭证与列表点击查看、通道抽屉（stable 保护）、
 // 版本下钻页与安装包直传（页面级 mock：upload-token / 登记 / OSS 域名 PUT——真实链路依赖
 // STS_ROLE_ARN 与真桶，当前环境未配 STS，故直传数据面 mock、管理面走真后端闭环）。
 // 发布 / 下线状态机语义已由 server e2e 覆盖，此处不做真发布（真后端无包记录会触发前置校验拒绝）。
@@ -31,7 +31,7 @@ test.describe('应用中心', () => {
     await expect(page.getByRole('menuitem', { name: '应用管理' })).toBeVisible()
   })
 
-  test('注册应用：凭证仅此一次展示 → 通道抽屉 stable 保护与增删 → 编辑 → 删除闭环', async ({ page }) => {
+  test('注册应用：凭证展示与列表点击查看 → 通道抽屉 stable 保护与增删 → 编辑 → 删除闭环', async ({ page }) => {
     await page.goto('/appcenter/app')
 
     // 注册：名称随机后缀 + 桌面形态 + 公开客户端 + Electron 框架
@@ -47,12 +47,13 @@ test.describe('应用中心', () => {
     await page.getByRole('option', { name: 'Electron' }).click()
     await dialog.getByRole('button', { name: '确定' }).click()
 
-    // 凭证弹窗：AppKey ah_ 前缀 + AppSecret 32 位（仅此一次）
+    // 凭证弹窗：AppKey ah_ 前缀 + AppSecret 32 位
     const credentialDialog = page.locator('.el-dialog').filter({ hasText: '请立即保存' })
     await expect(credentialDialog).toBeVisible()
     const codes = credentialDialog.locator('code')
     await expect(codes.nth(0)).toHaveText(/^ah_[a-z0-9]{16}$/)
     await expect(codes.nth(1)).toHaveText(/^[a-z0-9]{32}$/)
+    const appSecret = await codes.nth(1).textContent()
     await credentialDialog.getByRole('button', { name: '我已妥善保存' }).click()
 
     // 行出现：公开客户端标签 + Electron 框架
@@ -61,9 +62,18 @@ test.describe('应用中心', () => {
     await expect(row.locator('.el-tag--warning')).toHaveText('公开客户端')
     await expect(row.getByText('Electron')).toBeVisible()
 
-    // 通道抽屉：stable 预置且删除禁用；新增 beta 通道后可删
-    await row.getByRole('button', { name: '更多' }).click()
-    await page.getByRole('menuitem', { name: '更新通道' }).click()
+    // AppSecret 列恒为掩码，点击后按需拉取完整值弹窗展示（与注册时一致）
+    await expect(row.locator('.secret-mask')).toHaveText('****')
+    await row.locator('.secret-mask').click()
+    const viewDialog = page.locator('.el-dialog').filter({ hasText: '凭证属于敏感信息' })
+    await expect(viewDialog).toBeVisible()
+    await expect(viewDialog.locator('code').nth(1)).toHaveText(appSecret ?? '')
+    await viewDialog.getByRole('button', { name: '关闭', exact: true }).click()
+    await expect(viewDialog).toBeHidden()
+
+    // 通道抽屉：默认列宽下「更新通道」为一级可见动作（不再藏进下拉），stable 预置且删除禁用
+    await expect(row.getByRole('button', { name: '更新通道', exact: true })).toBeVisible()
+    await clickRowAction(page, row, '更新通道')
     const drawer = page.locator('.el-drawer').filter({ hasText: '更新通道' })
     await expect(drawer).toBeVisible()
     const stableRow = drawer.locator('.vxe-body--row').filter({ hasText: 'stable' })
@@ -93,8 +103,7 @@ test.describe('应用中心', () => {
 
     // 删除闭环（无已发布版本允许删）
     const renamed = page.locator('.vxe-body--row').filter({ hasText: `${name}改` }).first()
-    await renamed.getByRole('button', { name: '更多' }).click()
-    await page.getByRole('menuitem', { name: '删除应用' }).click()
+    await clickRowAction(page, renamed, '删除应用')
     await page.locator('.el-message-box').getByRole('button', { name: '确定' }).click()
     await expect(page.locator('.el-message').getByText('删除成功')).toBeVisible()
     await expect(page.locator('.vxe-body--row').filter({ hasText: `${name}改` })).toHaveCount(0)
@@ -215,6 +224,30 @@ test.describe('应用中心', () => {
     await expect(pkgRow).toBeVisible()
     await expect(pkgRow.getByText('Windows')).toBeVisible()
     await expect(pkgRow.locator('.el-tag--success').filter({ hasText: 'sha512' })).toBeVisible()
+
+    // 下载动作：签发签名 URL（mock）→ 浏览器按原始文件名下载（草稿 / 已发布 / 已下线均可下载）
+    await page.route('**/api/appcenter/version/*/package/*/download-url', async (route) => {
+      await route.fulfill({
+        json: okBody({
+          url: `https://oss-download-mock.example.com/${fileName}?Signature=e2e`,
+          fileName,
+          expiresIn: 7200,
+        }),
+      })
+    })
+    await page.route('**/oss-download-mock.example.com/**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        headers: { 'content-disposition': `attachment; filename="${fileName}"` },
+        body: 'e2e-mock-package-body',
+      })
+    })
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      clickRowAction(page, pkgRow, '下载'),
+    ])
+    expect(download.suggestedFilename()).toBe(fileName)
+
     await pkgDrawer.locator('.el-drawer__close-btn').click()
 
     // 清理闭环：删除草稿版本 → 返回删除应用
@@ -224,8 +257,7 @@ test.describe('应用中心', () => {
     await page.getByRole('button', { name: '← 返回应用列表' }).click()
     await expect(page).toHaveURL(/\/appcenter\/app$/)
     const cleanupRow = page.locator('.vxe-body--row').filter({ hasText: name }).first()
-    await cleanupRow.getByRole('button', { name: '更多' }).click()
-    await page.getByRole('menuitem', { name: '删除应用' }).click()
+    await clickRowAction(page, cleanupRow, '删除应用')
     await page.locator('.el-message-box').getByRole('button', { name: '确定' }).click()
     await expect(page.locator('.vxe-body--row').filter({ hasText: name })).toHaveCount(0)
   })

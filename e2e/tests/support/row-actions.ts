@@ -1,8 +1,6 @@
 // 行内操作按钮支撑件：适配 ApphubTable 操作列按钮动态收纳（RowActions，表格组件设计 §8）。
 // 按钮直接可见时原位交互；被收纳时先点「更多操作」展开 popover 再交互——用例无需感知当前
 // 收纳态（用户管理 / 通道抽屉的列宽与按钮总宽仅差 1~2px，字体环境微变即翻转收纳）。
-// 限于普通行内按钮：el-dropdown 触发器（应用页「更多」）收纳进 popover 后的展开交互
-// 未经验证，仍由用例原位点击（应用页 200px 当前三按钮全可见不收纳）
 import type { Locator, Page } from '@playwright/test'
 
 /** 收纳 popover 的隐藏按钮列表（全局唯一，teleport 至 body） */

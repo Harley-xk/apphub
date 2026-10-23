@@ -2,7 +2,7 @@
   作者: Harley-xk
   创建: 2026-10-16
 
-  描述: 版本安装包抽屉：版本下包记录列表（上传 / 删除仅草稿版本开放），框架产物列提示发布校验配套
+  描述: 版本安装包抽屉：版本下包记录列表（上传 / 删除仅草稿版本开放，下载不限状态），框架产物列提示发布校验配套
 -->
 <template>
   <el-drawer v-model="visible" :title="drawerTitle" size="900px">
@@ -12,7 +12,7 @@
         type="info"
         :closable="false"
         show-icon
-        :title="`当前版本为${statusLabel}状态，包记录只读（上传与删除仅草稿版本开放）`"
+        :title="`当前版本为${statusLabel}状态，包记录只读（上传与删除仅草稿版本开放，安装包随时可下载）`"
         class="tip-bar"
       />
       <div class="drawer-toolbar">
@@ -56,6 +56,23 @@
           </el-tooltip>
         </template>
         <template #action="{ row }">
+          <el-tooltip
+            :content="row.ossObjectKey ? '下载安装包（签名链接 2 小时内有效）' : 'iOS 仅登记元信息，无安装包文件'"
+            placement="top"
+          >
+            <span>
+              <el-button
+                v-hasPermi="'appcenter:version:query'"
+                link
+                type="primary"
+                :disabled="!row.ossObjectKey || downloadingId === row.id"
+                :loading="downloadingId === row.id"
+                @click="handleDownload(row)"
+              >
+                下载
+              </el-button>
+            </span>
+          </el-tooltip>
           <el-button
             v-if="version?.status === 'draft'"
             v-hasPermi="'appcenter:version:update'"
@@ -65,7 +82,6 @@
           >
             删除
           </el-button>
-          <span v-else class="arch-text">-</span>
         </template>
       </ApphubTable>
     </div>
@@ -79,7 +95,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, ref } from 'vue'
 
 import type { PackageVO } from '@/api/appcenter/package'
-import { deletePackage, getPackageList } from '@/api/appcenter/package'
+import { deletePackage, getPackageDownloadUrl, getPackageList } from '@/api/appcenter/package'
 import type { VersionVO } from '@/api/appcenter/version'
 import ApphubTable from '@/components/ApphubTable/index.vue'
 import type { ApphubTableColumn } from '@/components/ApphubTable/types'
@@ -108,7 +124,7 @@ const columns: ApphubTableColumn[] = [
   { field: 'fileSize', title: '大小', width: 90, slot: 'fileSize' },
   { field: 'artifacts', title: '框架产物', width: 210, slot: 'artifacts' },
   { field: 'createTime', title: '登记时间', width: 160, formatter: dateTimeFormatter },
-  { field: 'action', title: '操作', width: 80, fixed: 'right', slot: 'action' },
+  { field: 'action', title: '操作', width: 100, fixed: 'right', slot: 'action' },
 ]
 
 const visible = ref(false)
@@ -120,6 +136,9 @@ const version = ref<VersionVO | null>(null)
 const framework = ref<string | null>(null)
 
 const uploadDialogRef = ref<InstanceType<typeof PackageUploadDialog>>()
+
+/** 正在签发下载链接的包 id（按钮 loading，防重复点击） */
+const downloadingId = ref<string | null>(null)
 
 const drawerTitle = computed(() =>
   version.value ? `安装包 - ${version.value.version}（${STATUS_LABELS[version.value.status] ?? version.value.status}）` : '安装包',
@@ -157,6 +176,31 @@ function formatFileSize(size: number): string {
     return `${(size / 1024 / 1024).toFixed(2)} MB`
   }
   return `${(size / 1024).toFixed(1)} KB`
+}
+
+/**
+ * 下载安装包：先向后端签发签名 URL，再用临时 <a> 触发浏览器下载。
+ * 签名 URL 携带 response-content-disposition attachment，浏览器按原始文件名落盘；
+ * 不用 window.open（异步签发后被弹窗拦截），临时 <a> 不触发拦截。
+ */
+async function handleDownload(pkg: PackageVO): Promise<void> {
+  if (!version.value || downloadingId.value) {
+    return
+  }
+  downloadingId.value = pkg.id
+  try {
+    const { url, fileName } = await getPackageDownloadUrl(version.value.id, pkg.id)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = fileName
+    anchor.rel = 'noopener'
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+  }
+  finally {
+    downloadingId.value = null
+  }
 }
 
 async function handleDelete(pkg: PackageVO): Promise<void> {

@@ -144,8 +144,7 @@ test.describe('会员中心', () => {
 
     await page.goto('/appcenter/app')
     const appRow = page.locator('.vxe-body--row').filter({ hasText: `会员e2e应用${suffix}` }).first()
-    await appRow.getByRole('button', { name: '更多' }).click()
-    await page.getByRole('menuitem', { name: '删除应用' }).click()
+    await clickRowAction(page, appRow, '删除应用')
     await page.locator('.el-message-box').getByRole('button', { name: '确定' }).click()
     await expect(page.locator('.el-message').getByText('删除成功')).toBeVisible()
     await expect(page.locator('.vxe-body--row').filter({ hasText: `会员e2e应用${suffix}` })).toHaveCount(0)
@@ -229,8 +228,7 @@ test.describe('会员中心', () => {
 
     await page.goto('/appcenter/app')
     const appRow = page.locator('.vxe-body--row').filter({ hasText: `扫码e2e应用${suffix}` }).first()
-    await appRow.getByRole('button', { name: '更多' }).click()
-    await page.getByRole('menuitem', { name: '删除应用' }).click()
+    await clickRowAction(page, appRow, '删除应用')
     await page.locator('.el-message-box').getByRole('button', { name: '确定' }).click()
     await expect(page.locator('.el-message').getByText('删除成功')).toBeVisible()
   })

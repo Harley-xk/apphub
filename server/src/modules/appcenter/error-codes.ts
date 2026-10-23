@@ -56,4 +56,6 @@ export const AppcenterErrorCode = {
   PACKAGE_OBJECT_NOT_EXISTS: new ErrorCode(300400004, '安装包对象不存在（尚未上传完成或对象键不符）'),
   /** 包记录不存在 */
   PACKAGE_NOT_EXISTS: new ErrorCode(300400005, '包记录不存在'),
+  /** 包记录无安装包对象（ios 仅登记元信息，无文件可下载） */
+  PACKAGE_OBJECT_MISSING: new ErrorCode(300400006, '该包无安装包文件（ios 仅登记元信息），无法下载'),
 } as const

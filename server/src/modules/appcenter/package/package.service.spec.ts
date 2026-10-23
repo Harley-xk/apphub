@@ -49,6 +49,7 @@ function makeService(options: {
   const issuedCredentials: { objectKey: string, blockmapObjectKey: string }[] = []
   const deletedObjectKeys: string[] = []
   const savedPackages: PackageRow[] = []
+  const signedUrls: { objectKey: string, expiresSeconds?: number, fileName?: string }[] = []
 
   const packageRepository = {
     find: (findOptions: { where?: Record<string, unknown> }) =>
@@ -87,6 +88,10 @@ function makeService(options: {
       deletedObjectKeys.push(objectKey)
       return Promise.resolve()
     },
+    signGetUrl: (objectKey: string, expiresSeconds?: number, fileName?: string) => {
+      signedUrls.push({ objectKey, expiresSeconds, fileName })
+      return `https://oss.example.com/${objectKey}?Signature=signed`
+    },
   }
   // 应用可达性校验（存在性 + 数据范围）：包实体无 appId，经 versionId → appId 反查后委托
   const appService = { assertAccessible: () => Promise.resolve(APP) }
@@ -98,7 +103,7 @@ function makeService(options: {
     storageService as StorageService,
     appService as never,
   )
-  return { service, issuedCredentials, deletedObjectKeys, savedPackages }
+  return { service, issuedCredentials, deletedObjectKeys, savedPackages, signedUrls }
 }
 
 describe('PackageService（直传凭证）', () => {
@@ -204,6 +209,49 @@ describe('PackageService（登记）', () => {
     await expect(
       service.register('v1', { platform: 'windows', arch: 'x64', fileName: 'a.exe', sha256: 'a'.repeat(64) }, USER_ID),
     ).rejects.toMatchObject({ code: AppcenterErrorCode.PACKAGE_OBJECT_NOT_EXISTS.code })
+  })
+})
+
+describe('PackageService（下载）', () => {
+  const PKG: PackageRow = {
+    id: 'p1', versionId: 'v1', platform: 'windows', arch: 'x64', fileName: '应用安装包-1.3.0.exe', fileSize: 100,
+    sha256: 'x', sha512: 'y', ossObjectKey: 'packages/ah_demo/stable/1.3.0/windows-x64/应用安装包-1.3.0.exe',
+  }
+
+  it('已发布版本也应签发签名 URL（携带原始文件名，2h 时效）', async () => {
+    const { service, signedUrls } = makeService({
+      apps: [APP], channels: [CHANNEL], versions: [{ ...DRAFT, status: 'published' }], packages: [PKG],
+    })
+    await expect(service.getDownloadUrl('v1', 'p1', USER_ID)).resolves.toEqual({
+      url: `https://oss.example.com/${PKG.ossObjectKey}?Signature=signed`,
+      fileName: PKG.fileName,
+      expiresIn: 7200,
+    })
+    expect(signedUrls[0]).toEqual({
+      objectKey: PKG.ossObjectKey,
+      expiresSeconds: 7200,
+      fileName: PKG.fileName,
+    })
+  })
+
+  it('包不属于该版本（或不存在）应抛 PACKAGE_NOT_EXISTS', async () => {
+    const { service } = makeService({ apps: [APP], channels: [CHANNEL], versions: [DRAFT], packages: [PKG] })
+    await expect(service.getDownloadUrl('v1', 'ghost', USER_ID)).rejects.toMatchObject({
+      code: AppcenterErrorCode.PACKAGE_NOT_EXISTS.code,
+    })
+  })
+
+  it('ios 元信息包无对象键应抛 PACKAGE_OBJECT_MISSING（不签发空对象 URL）', async () => {
+    const { service, signedUrls } = makeService({
+      apps: [APP],
+      channels: [CHANNEL],
+      versions: [DRAFT],
+      packages: [{ ...PKG, platform: 'ios', arch: null, ossObjectKey: '' }],
+    })
+    await expect(service.getDownloadUrl('v1', 'p1', USER_ID)).rejects.toMatchObject({
+      code: AppcenterErrorCode.PACKAGE_OBJECT_MISSING.code,
+    })
+    expect(signedUrls).toHaveLength(0)
   })
 })
 

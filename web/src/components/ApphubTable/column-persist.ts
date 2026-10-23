@@ -31,6 +31,8 @@ export interface PersistableColumnInfo {
 /** 恢复算法的输入列最小结构 */
 export interface OrderableColumn {
   field: string
+  /** 固定列标记：新增列的插入点依据（fixed right 列须保持在最右） */
+  fixed?: 'left' | 'right'
 }
 
 /** 读取指定视图的列状态（无记录或数据损坏返回 null，脏数据顺带清除） */
@@ -77,7 +79,9 @@ export function saveColumnState(viewKey: string, columns: PersistableColumnInfo[
 /**
  * 将存储状态应用回页面列定义（不修改入参）：
  * 1. order 重排：存储顺序为主；已删除列的字段忽略；代码新增列按原相对顺序追加尾部
- * 2. widths 覆盖：有拖拽记录的列改固定像素宽，其余保持原定义（fixed 等属性始终由代码决定）
+ * 2. 固定列归位（fixed left 居首、fixed right 居尾，各自保持相对顺序）——vxe 要求固定列
+ *    连续居边；旧持久化记录里没有新增列，直接追加尾部会把新列排到最右操作列之外
+ * 3. widths 覆盖：有拖拽记录的列改固定像素宽，其余保持原定义（fixed 等属性始终由代码决定）
  */
 export function applyColumnState<T extends OrderableColumn>(columns: T[], state: TableColumnState | null): T[] {
   if (!state || columns.length === 0) {
@@ -86,10 +90,15 @@ export function applyColumnState<T extends OrderableColumn>(columns: T[], state:
   const fieldSet = new Set(columns.map(col => col.field))
   const storedOrder = state.order.filter(field => fieldSet.has(field))
   const orderedFields = new Set(storedOrder)
-  const ordered = storedOrder
-    .map(field => columns.find(col => col.field === field)!)
-    .concat(columns.filter(col => !orderedFields.has(col.field)))
-  return ordered.map((col) => {
+  const ordered = storedOrder.map(field => columns.find(col => col.field === field)!)
+  const merged = ordered.concat(columns.filter(col => !orderedFields.has(col.field)))
+  const isFixed = (col: T, side: 'left' | 'right') => col.fixed === side
+  const placed = [
+    ...merged.filter(col => isFixed(col, 'left')),
+    ...merged.filter(col => !isFixed(col, 'left') && !isFixed(col, 'right')),
+    ...merged.filter(col => isFixed(col, 'right')),
+  ]
+  return placed.map((col) => {
     const width = state.widths[col.field]
     return typeof width === 'number' && width > 0 ? { ...col, width: Math.round(width) } : col
   })

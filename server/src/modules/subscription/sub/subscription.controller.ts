@@ -10,6 +10,8 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger'
 import { SubscriptionPageDto } from './dto/subscription.dto'
 import type { SubscriptionVo } from './dto/subscription.dto'
 import { SubscriptionService } from './subscription.service'
+import { CurrentUser } from '../../../common/decorators/current-user.decorator'
+import type { AuthUser } from '../../../common/decorators/current-user.decorator'
 import type { PageResult } from '../../../common/interfaces/page-result.interface'
 import { RequirePermissions } from '../../system/permissions'
 import { SUBSCRIPTION_PERMISSION_CODES } from '../permissions'
@@ -22,7 +24,7 @@ export class SubscriptionController {
   @ApiOperation({ summary: '订阅实例分页列表（有效 / 已过期打标）' })
   @RequirePermissions(SUBSCRIPTION_PERMISSION_CODES.SUB_QUERY)
   @Get()
-  async getPage(@Query() dto: SubscriptionPageDto): Promise<PageResult<SubscriptionVo>> {
-    return this.subscriptionService.getPage(dto)
+  async getPage(@Query() dto: SubscriptionPageDto, @CurrentUser() user: AuthUser): Promise<PageResult<SubscriptionVo>> {
+    return this.subscriptionService.getPage(dto, user.id)
   }
 }

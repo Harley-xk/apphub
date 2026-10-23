@@ -16,15 +16,15 @@ describe('appcenter 模块权限点注册表', () => {
     }
   })
 
-  it('权限点全集应为 15 项（app 5 + channel 4 + version 6）', () => {
-    expect(APPCENTER_PERMISSIONS.length).toBe(15)
+  it('权限点全集应为 16 项（app 6 + channel 4 + version 6）', () => {
+    expect(APPCENTER_PERMISSIONS.length).toBe(16)
   })
 
   it('接入注册表应校验通过并扩容全集（与启动期同链路的冒烟）', () => {
     const registry = new PermissionRegistry()
     registry.registerModule({ module: APPCENTER_MODULE_NAME, points: APPCENTER_PERMISSIONS })
-    // system 构造期 30 项 + appcenter 15 项
-    expect(registry.allCodes().length).toBe(45)
+    // system 构造期 31 项 + appcenter 16 项
+    expect(registry.allCodes().length).toBe(47)
     expect(registry.contains('appcenter:app:query')).toBe(true)
   })
 })

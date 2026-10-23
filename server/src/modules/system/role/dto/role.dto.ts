@@ -10,6 +10,7 @@ import {
   ArrayUnique,
   IsArray,
   IsBoolean,
+  IsIn,
   IsInt,
   IsNotEmpty,
   IsOptional,
@@ -22,6 +23,7 @@ import {
 } from 'class-validator'
 
 import { PageParamDto } from '../../../../common/dto/page.dto'
+import { DATA_SCOPE_VALUES } from '../../system.constants'
 
 /** 角色列表出参 */
 export interface RoleVo {
@@ -30,6 +32,8 @@ export interface RoleVo {
   code: string
   sort: number
   status: boolean
+  /** 数据范围：all 全局 / app 按应用收窄 */
+  dataScope: string
   remark: string | null
   createTime: Date
 }
@@ -73,6 +77,11 @@ export class RoleCreateDto {
   @Max(9999)
   sort?: number
 
+  @ApiPropertyOptional({ description: '数据范围（all 全部应用 / app 按应用收窄），默认 all' })
+  @IsOptional()
+  @IsIn(DATA_SCOPE_VALUES, { message: '数据范围取值须为 all / app' })
+  dataScope?: string
+
   @ApiPropertyOptional({ description: '备注' })
   @IsOptional()
   @IsString()
@@ -101,6 +110,11 @@ export class RoleUpdateDto {
   @Min(0)
   @Max(9999)
   sort?: number
+
+  @ApiPropertyOptional({ description: '数据范围（all 全部应用 / app 按应用收窄）' })
+  @IsOptional()
+  @IsIn(DATA_SCOPE_VALUES, { message: '数据范围取值须为 all / app' })
+  dataScope?: string
 
   @ApiPropertyOptional({ description: '备注' })
   @IsOptional()

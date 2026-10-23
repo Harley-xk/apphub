@@ -28,6 +28,8 @@ function matches(row: unknown, where: Record<string, unknown> | undefined): bool
   })
 }
 
+const USER_ID = 'u-1'
+
 const APP: AppRow = { id: 'a1', appKey: 'ah_demo', appType: ['desktop'], framework: 'electron', status: 'enabled' }
 const CHANNEL: ChannelRow = { id: 'ch1', appId: 'a1', code: 'stable', name: '稳定版', status: 'enabled' }
 const DRAFT: VersionRow = { id: 'v1', appId: 'a1', channelId: 'ch1', version: '1.3.0', title: '新版本', status: 'draft', forceUpdate: false }
@@ -86,12 +88,15 @@ function makeService(options: {
       return Promise.resolve()
     },
   }
+  // 应用可达性校验（存在性 + 数据范围）：包实体无 appId，经 versionId → appId 反查后委托
+  const appService = { assertAccessible: () => Promise.resolve(APP) }
   const service = new PackageService(
     packageRepository as never,
     versionRepository as never,
     appRepository as never,
     channelRepository as never,
     storageService as StorageService,
+    appService as never,
   )
   return { service, issuedCredentials, deletedObjectKeys, savedPackages }
 }
@@ -99,7 +104,7 @@ function makeService(options: {
 describe('PackageService（直传凭证）', () => {
   it('对象键应按后端规范生成并随凭证下发（前端不自由拼键）', async () => {
     const { service, issuedCredentials } = makeService({ apps: [APP], channels: [CHANNEL], versions: [DRAFT] })
-    await service.issueUploadToken('v1', { platform: 'windows', arch: 'x64', fileName: 'app-setup-1.3.0.exe' })
+    await service.issueUploadToken('v1', { platform: 'windows', arch: 'x64', fileName: 'app-setup-1.3.0.exe' }, USER_ID)
     expect(issuedCredentials[0]?.objectKey).toBe('packages/ah_demo/stable/1.3.0/windows-x64/app-setup-1.3.0.exe')
     expect(issuedCredentials[0]?.blockmapObjectKey).toBe('packages/ah_demo/stable/1.3.0/windows-x64/app-setup-1.3.0.exe.blockmap')
   })
@@ -109,7 +114,7 @@ describe('PackageService（直传凭证）', () => {
       apps: [APP], channels: [CHANNEL], versions: [{ ...DRAFT, status: 'published' }],
     })
     await expect(
-      service.issueUploadToken('v1', { platform: 'windows', arch: 'x64', fileName: 'a.exe' }),
+      service.issueUploadToken('v1', { platform: 'windows', arch: 'x64', fileName: 'a.exe' }, USER_ID),
     ).rejects.toMatchObject({ code: AppcenterErrorCode.VERSION_STATUS_FORBIDDEN.code })
   })
 
@@ -121,7 +126,7 @@ describe('PackageService（直传凭证）', () => {
       packages: [{ versionId: 'v1', platform: 'android', arch: null, fileName: 'a.apk', fileSize: 1, sha256: 'x', ossObjectKey: 'k' }],
     })
     await expect(
-      service.issueUploadToken('v1', { platform: 'android', fileName: 'b.apk' }),
+      service.issueUploadToken('v1', { platform: 'android', fileName: 'b.apk' }, USER_ID),
     ).rejects.toMatchObject({ code: AppcenterErrorCode.PACKAGE_PLATFORM_DUPLICATE.code })
   })
 })
@@ -140,7 +145,7 @@ describe('PackageService（登记）', () => {
       platform: 'windows', arch: 'x64', fileName: 'a.exe',
       objectKey: 'packages/ah_demo/stable/1.3.0/windows-x64/a.exe',
       sha256: 'a'.repeat(64),
-    })
+    }, USER_ID)
     expect(savedPackages[0]?.fileSize).toBe(1048576)
   })
 
@@ -151,7 +156,7 @@ describe('PackageService（登记）', () => {
         platform: 'windows', arch: 'x64', fileName: 'a.exe',
         objectKey: 'packages/ah_demo/stable/1.3.0/windows-x64/a.exe',
         sha256: 'a'.repeat(64),
-      }),
+      }, USER_ID),
     ).rejects.toMatchObject({ code: AppcenterErrorCode.PACKAGE_OBJECT_NOT_EXISTS.code })
   })
 
@@ -159,7 +164,7 @@ describe('PackageService（登记）', () => {
     const { service, savedPackages } = makeService({ apps: [APP], channels: [CHANNEL], versions: [DRAFT] })
     await service.register('v1', {
       platform: 'ios', fileName: 'App Store', sha256: '0'.repeat(64),
-    })
+    }, USER_ID)
     expect(savedPackages[0]?.ossObjectKey).toBe('')
     expect(savedPackages[0]?.fileSize).toBe(0)
   })
@@ -173,7 +178,7 @@ describe('PackageService（登记）', () => {
       objectKey: 'packages/ah_demo/stable/1.3.0/windows-x64/a.exe',
       sha256: 'a'.repeat(64),
       blockmapSha512: 'YmxvY2ttYXAtc2hhNTEy',
-    })
+    }, USER_ID)
     expect(savedPackages[0]?.blockmapObjectKey).toBe('packages/ah_demo/stable/1.3.0/windows-x64/a.exe.blockmap')
     // 前端未声明大小时以 HeadObject 为准
     expect(savedPackages[0]?.blockmapFileSize).toBe(4096)
@@ -190,14 +195,14 @@ describe('PackageService（登记）', () => {
         objectKey: 'packages/ah_demo/stable/1.3.0/windows-x64/a.exe',
         sha256: 'a'.repeat(64),
         blockmapSha512: 'YmxvY2ttYXAtc2hhNTEy',
-      }),
+      }, USER_ID),
     ).rejects.toMatchObject({ code: AppcenterErrorCode.PACKAGE_OBJECT_NOT_EXISTS.code })
   })
 
   it('非 ios 平台缺对象键应拒绝', async () => {
     const { service } = makeService({ apps: [APP], channels: [CHANNEL], versions: [DRAFT] })
     await expect(
-      service.register('v1', { platform: 'windows', arch: 'x64', fileName: 'a.exe', sha256: 'a'.repeat(64) }),
+      service.register('v1', { platform: 'windows', arch: 'x64', fileName: 'a.exe', sha256: 'a'.repeat(64) }, USER_ID),
     ).rejects.toMatchObject({ code: AppcenterErrorCode.PACKAGE_OBJECT_NOT_EXISTS.code })
   })
 })
@@ -211,7 +216,7 @@ describe('PackageService（删除）', () => {
 
   it('包不属于该版本（或不存在）应抛 PACKAGE_NOT_EXISTS', async () => {
     const { service } = makeService({ apps: [APP], channels: [CHANNEL], versions: [DRAFT], packages: [PKG] })
-    await expect(service.remove('v1', 'ghost')).rejects.toMatchObject({
+    await expect(service.remove('v1', 'ghost', USER_ID)).rejects.toMatchObject({
       code: AppcenterErrorCode.PACKAGE_NOT_EXISTS.code,
     })
   })
@@ -220,7 +225,7 @@ describe('PackageService（删除）', () => {
     const { service } = makeService({
       apps: [APP], channels: [CHANNEL], versions: [{ ...DRAFT, status: 'published' }], packages: [{ ...PKG, id: 'p1' }],
     })
-    await expect(service.remove('v1', 'p1')).rejects.toMatchObject({
+    await expect(service.remove('v1', 'p1', USER_ID)).rejects.toMatchObject({
       code: AppcenterErrorCode.VERSION_STATUS_FORBIDDEN.code,
     })
   })
@@ -229,7 +234,7 @@ describe('PackageService（删除）', () => {
     const { service, deletedObjectKeys } = makeService({
       apps: [APP], channels: [CHANNEL], versions: [DRAFT], packages: [{ ...PKG, id: 'p1' }],
     })
-    await expect(service.remove('v1', 'p1')).resolves.toBeUndefined()
+    await expect(service.remove('v1', 'p1', USER_ID)).resolves.toBeUndefined()
     expect(deletedObjectKeys).toContain('packages/ah_demo/stable/1.3.0/windows-x64/a.exe')
     expect(deletedObjectKeys).toContain('packages/ah_demo/stable/1.3.0/windows-x64/a.exe.blockmap')
   })

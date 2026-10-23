@@ -46,8 +46,8 @@ export class PermissionService {
     return roles.map(role => role.code)
   }
 
-  /** 查用户的启用角色实体（停用角色的权限即时失效，查询侧仅计入 status = true） */
-  private async getUserEnabledRoles(userId: string): Promise<RoleEntity[]> {
+  /** 查用户的启用角色实体（停用角色的权限即时失效，查询侧仅计入 status = true；数据范围判定复用） */
+  async getUserEnabledRoles(userId: string): Promise<RoleEntity[]> {
     const relations = await this.userRoleRepository.find({ where: { userId } })
     if (relations.length === 0)
       return []

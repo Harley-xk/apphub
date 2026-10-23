@@ -4,6 +4,7 @@
  *
  * 描述: 用户管理接口封装：分页 / CRUD / 重置口令 / 角色分配与回显（部门 / 岗位为批次五扩展字段）
  */
+import type { AppOptionVO } from '@/api/appcenter/app'
 import type { PageParam, PageResult } from '@/api/http'
 import { http } from '@/api/http'
 
@@ -77,4 +78,21 @@ export async function getUserRoleIds(id: string): Promise<string[]> {
 /** 分配角色（roleIds 为目标全集，后端差集增量绑定） */
 export async function assignUserRoles(id: string, roleIds: string[]): Promise<void> {
   await http.put<null>('/system/user/assign-role', { id, roleIds })
+}
+
+/** 用户应用授权回显（appIds 为授权集合，apps 为未软删应用精简信息） */
+export interface UserAppScopeVO {
+  appIds: string[]
+  apps: AppOptionVO[]
+}
+
+/** 查询用户应用授权（分配弹窗回显） */
+export async function getUserAppScope(id: string): Promise<UserAppScopeVO> {
+  const { data } = await http.get<UserAppScopeVO>(`/system/user/${id}/app-scope`)
+  return data!
+}
+
+/** 分配应用授权（appIds 为目标全集，后端差集增量绑定；仅对 app 数据范围角色生效） */
+export async function assignUserAppScope(id: string, appIds: string[]): Promise<void> {
+  await http.put<null>(`/system/user/${id}/app-scope`, { appIds })
 }

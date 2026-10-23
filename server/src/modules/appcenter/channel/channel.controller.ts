@@ -7,6 +7,8 @@
 import { Body, Controller, Delete, Get, Param, Post, Put } from '@nestjs/common'
 import { ApiOperation, ApiTags } from '@nestjs/swagger'
 
+import { CurrentUser } from '../../../common/decorators/current-user.decorator'
+import type { AuthUser } from '../../../common/decorators/current-user.decorator'
 import { OperateLog } from '../../../common/decorators/operate-log.decorator'
 import { RequirePermissions } from '../../system/permissions'
 import { APPCENTER_PERMISSION_CODES } from '../permissions'
@@ -23,16 +25,20 @@ export class ChannelController {
   @ApiOperation({ summary: '应用内通道列表' })
   @RequirePermissions(APPCENTER_PERMISSION_CODES.CHANNEL_QUERY)
   @Get()
-  async list(@Param('id') appId: string): Promise<ChannelVo[]> {
-    return this.channelService.list(appId)
+  async list(@Param('id') appId: string, @CurrentUser() user: AuthUser): Promise<ChannelVo[]> {
+    return this.channelService.list(appId, user.id)
   }
 
   @ApiOperation({ summary: '创建通道' })
   @OperateLog('应用管理', '新增通道')
   @RequirePermissions(APPCENTER_PERMISSION_CODES.CHANNEL_CREATE)
   @Post()
-  async create(@Param('id') appId: string, @Body() dto: ChannelCreateDto): Promise<string> {
-    return this.channelService.create(appId, dto)
+  async create(
+    @Param('id') appId: string,
+    @Body() dto: ChannelCreateDto,
+    @CurrentUser() user: AuthUser,
+  ): Promise<string> {
+    return this.channelService.create(appId, dto, user.id)
   }
 
   @ApiOperation({ summary: '编辑通道（code 不可改）' })
@@ -43,15 +49,20 @@ export class ChannelController {
     @Param('id') appId: string,
     @Param('channelId') channelId: string,
     @Body() dto: ChannelUpdateDto,
+    @CurrentUser() user: AuthUser,
   ): Promise<void> {
-    await this.channelService.update(appId, channelId, dto)
+    await this.channelService.update(appId, channelId, dto, user.id)
   }
 
   @ApiOperation({ summary: '删除通道（stable 不可删）' })
   @OperateLog('应用管理', '删除通道')
   @RequirePermissions(APPCENTER_PERMISSION_CODES.CHANNEL_REMOVE)
   @Delete(':channelId')
-  async remove(@Param('id') appId: string, @Param('channelId') channelId: string): Promise<void> {
-    await this.channelService.remove(appId, channelId)
+  async remove(
+    @Param('id') appId: string,
+    @Param('channelId') channelId: string,
+    @CurrentUser() user: AuthUser,
+  ): Promise<void> {
+    await this.channelService.remove(appId, channelId, user.id)
   }
 }

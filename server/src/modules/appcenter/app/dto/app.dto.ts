@@ -47,6 +47,15 @@ export interface AppCredentialVo {
   appSecret: string
 }
 
+/** 应用下拉查询入参（授权弹窗远程搜索与订阅页筛选） */
+export class AppOptionsDto {
+  @ApiPropertyOptional({ description: '关键字（同时匹配应用名称与 AppKey）' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  keyword?: string
+}
+
 export class AppPageDto extends PageParamDto {
   @ApiPropertyOptional({ description: '应用名称模糊匹配' })
   @IsOptional()

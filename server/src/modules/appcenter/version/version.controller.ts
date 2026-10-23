@@ -7,6 +7,8 @@
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common'
 import { ApiOperation, ApiTags } from '@nestjs/swagger'
 
+import { CurrentUser } from '../../../common/decorators/current-user.decorator'
+import type { AuthUser } from '../../../common/decorators/current-user.decorator'
 import { OperateLog } from '../../../common/decorators/operate-log.decorator'
 import type { PageResult } from '../../../common/interfaces/page-result.interface'
 import { RequirePermissions } from '../../system/permissions'
@@ -24,15 +26,23 @@ export class VersionController {
   @ApiOperation({ summary: '应用内版本分页列表（通道 / 状态过滤）' })
   @RequirePermissions(APPCENTER_PERMISSION_CODES.VERSION_QUERY)
   @Get()
-  async getPage(@Param('id') appId: string, @Query() dto: VersionPageDto): Promise<PageResult<VersionVo>> {
-    return this.versionService.getPage(appId, dto)
+  async getPage(
+    @Param('id') appId: string,
+    @Query() dto: VersionPageDto,
+    @CurrentUser() user: AuthUser,
+  ): Promise<PageResult<VersionVo>> {
+    return this.versionService.getPage(appId, dto, user.id)
   }
 
   @ApiOperation({ summary: '创建草稿版本（semver 强制校验）' })
   @OperateLog('应用管理', '新增版本')
   @RequirePermissions(APPCENTER_PERMISSION_CODES.VERSION_CREATE)
   @Post()
-  async create(@Param('id') appId: string, @Body() dto: VersionCreateDto): Promise<string> {
-    return this.versionService.create(appId, dto)
+  async create(
+    @Param('id') appId: string,
+    @Body() dto: VersionCreateDto,
+    @CurrentUser() user: AuthUser,
+  ): Promise<string> {
+    return this.versionService.create(appId, dto, user.id)
   }
 }

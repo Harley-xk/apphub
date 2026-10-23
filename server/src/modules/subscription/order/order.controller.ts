@@ -11,6 +11,8 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger'
 import { OfflineCreateDto, OrderPageDto } from './dto/order.dto'
 import type { OrderVo } from './dto/order.dto'
 import { OrderService } from './order.service'
+import { CurrentUser } from '../../../common/decorators/current-user.decorator'
+import type { AuthUser } from '../../../common/decorators/current-user.decorator'
 import { OperateLog } from '../../../common/decorators/operate-log.decorator'
 import type { PageResult } from '../../../common/interfaces/page-result.interface'
 import { RequirePermissions } from '../../system/permissions'
@@ -24,23 +26,23 @@ export class OrderController {
   @ApiOperation({ summary: '订单分页列表（渠道 / 状态 / 应用 / 会员 / 订单号筛选）' })
   @RequirePermissions(SUBSCRIPTION_PERMISSION_CODES.ORDER_QUERY)
   @Get()
-  async getPage(@Query() dto: OrderPageDto): Promise<PageResult<OrderVo>> {
-    return this.orderService.getPage(dto)
+  async getPage(@Query() dto: OrderPageDto, @CurrentUser() user: AuthUser): Promise<PageResult<OrderVo>> {
+    return this.orderService.getPage(dto, user.id)
   }
 
   @ApiOperation({ summary: '线下收款备案（创建 offline 订单并直接 paid，订阅即时顺延）' })
   @OperateLog('订阅订单管理', '线下收款备案')
   @RequirePermissions(SUBSCRIPTION_PERMISSION_CODES.ORDER_OFFLINE_CREATE)
   @Post('offline')
-  async createOfflineOrder(@Body() dto: OfflineCreateDto): Promise<OrderVo> {
-    return this.orderService.createOfflineOrder(dto)
+  async createOfflineOrder(@Body() dto: OfflineCreateDto, @CurrentUser() user: AuthUser): Promise<OrderVo> {
+    return this.orderService.createOfflineOrder(dto, user.id)
   }
 
   @ApiOperation({ summary: '手动关闭待支付订单' })
   @OperateLog('订阅订单管理', '手动关闭订单')
   @RequirePermissions(SUBSCRIPTION_PERMISSION_CODES.ORDER_CLOSE)
   @Post(':id/close')
-  async closeOrder(@Param('id') id: string): Promise<void> {
-    await this.orderService.closeOrder(id)
+  async closeOrder(@Param('id') id: string, @CurrentUser() user: AuthUser): Promise<void> {
+    await this.orderService.closeOrder(id, user.id)
   }
 }

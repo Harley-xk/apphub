@@ -37,6 +37,8 @@ function makeService(options: {
   channels?: ChannelRow[]
   versions?: VersionRow[]
   packages?: PackageRow[]
+  /** 数据范围越权场景：assertAccessible 一律拒绝（APP_SCOPE_FORBIDDEN） */
+  scoped?: boolean
 } = {}) {
   const apps: AppRow[] = (options.apps ?? []).map(row => ({ ...row }))
   const channels: ChannelRow[] = (options.channels ?? []).map(row => ({ ...row }))
@@ -68,9 +70,16 @@ function makeService(options: {
       Promise.resolve(packages.filter(pkg => matches(pkg, findOptions.where))),
     softRemove: (entity: PackageRow) => Promise.resolve(entity),
   }
-  const appRepository = {
-    findOne: (findOptions: { where?: Record<string, unknown> }) =>
-      Promise.resolve(apps.find(app => matches(app, findOptions.where)) ?? null),
+  // 应用可达性校验（存在性 + 数据范围）：默认放行命中应用，scoped 用例改为拒绝
+  const appService = {
+    assertAccessible: (_userId: string, appId: string) => {
+      const app = apps.find(row => row.id === appId)
+      if (options.scoped)
+        return Promise.reject(Object.assign(new Error('无权操作该应用'), { code: AppcenterErrorCode.APP_SCOPE_FORBIDDEN.code }))
+      if (!app)
+        return Promise.reject(Object.assign(new Error('应用不存在'), { code: AppcenterErrorCode.APP_NOT_EXISTS.code }))
+      return Promise.resolve(app)
+    },
   }
   const channelRepository = {
     findOne: (findOptions: { where?: Record<string, unknown> }) =>
@@ -87,12 +96,14 @@ function makeService(options: {
   const service = new VersionService(
     versionRepository as never,
     packageRepository as never,
-    appRepository as never,
     channelRepository as never,
     storageService as never,
+    appService as never,
   )
   return { service, deletedObjectKeys, wasWithDeletedUsed: () => usedWithDeleted }
 }
+
+const USER_ID = 'u-1'
 
 const APP: AppRow = { id: 'a1', appKey: 'ah_demo', appType: ['desktop'], framework: 'electron', status: 'enabled' }
 const CHANNEL: ChannelRow = { id: 'ch1', appId: 'a1', code: 'stable', name: '稳定版', status: 'enabled' }
@@ -103,14 +114,14 @@ describe('VersionService（创建与编辑）', () => {
   it('版本号非 semver 应抛 VERSION_NOT_SEMVER', async () => {
     const { service } = makeService({ apps: [APP], channels: [CHANNEL] })
     await expect(
-      service.create('a1', { channelId: 'ch1', version: '1.0', title: '非法版本' }),
+      service.create('a1', { channelId: 'ch1', version: '1.0', title: '非法版本' }, USER_ID),
     ).rejects.toMatchObject({ code: AppcenterErrorCode.VERSION_NOT_SEMVER.code })
   })
 
   it('预发布后缀 semver 应合法（1.0.0-beta.1 < 1.0.0 语义）', async () => {
     const { service } = makeService({ apps: [APP], channels: [CHANNEL] })
     await expect(
-      service.create('a1', { channelId: 'ch1', version: '1.0.0-beta.1', title: '公测' }),
+      service.create('a1', { channelId: 'ch1', version: '1.0.0-beta.1', title: '公测' }, USER_ID),
     ).resolves.toBeDefined()
   })
 
@@ -121,7 +132,7 @@ describe('VersionService（创建与编辑）', () => {
       versions: [{ ...DRAFT, deletedAt: new Date() }],
     })
     await expect(
-      service.create('a1', { channelId: 'ch1', version: '1.0.0', title: '复用软删版本号' }),
+      service.create('a1', { channelId: 'ch1', version: '1.0.0', title: '复用软删版本号' }, USER_ID),
     ).rejects.toMatchObject({ code: AppcenterErrorCode.VERSION_DUPLICATE.code })
     expect(wasWithDeletedUsed()).toBe(true)
   })
@@ -129,34 +140,34 @@ describe('VersionService（创建与编辑）', () => {
   it('通道不存在（含跨应用访问）应抛 CHANNEL_NOT_EXISTS', async () => {
     const { service } = makeService({ apps: [APP], channels: [{ ...CHANNEL, appId: 'a2' }] })
     await expect(
-      service.create('a1', { channelId: 'ch1', version: '1.0.0', title: '首发' }),
+      service.create('a1', { channelId: 'ch1', version: '1.0.0', title: '首发' }, USER_ID),
     ).rejects.toMatchObject({ code: AppcenterErrorCode.CHANNEL_NOT_EXISTS.code })
   })
 
   it('published 版本仅允许改说明与强制标记：改版本号应抛状态机错误', async () => {
     const { service } = makeService({ apps: [APP], versions: [{ ...DRAFT, status: 'published' }] })
     await expect(
-      service.update({ id: 'v1', version: '1.0.1' }),
+      service.update({ id: 'v1', version: '1.0.1' }, USER_ID),
     ).rejects.toMatchObject({ code: AppcenterErrorCode.VERSION_STATUS_FORBIDDEN.code })
   })
 
   it('published 版本可以修改说明与强制标记（发版后补救）', async () => {
     const { service } = makeService({ apps: [APP], versions: [{ ...DRAFT, status: 'published' }] })
     await expect(
-      service.update({ id: 'v1', notes: '补发的更新说明', forceUpdate: true }),
+      service.update({ id: 'v1', notes: '补发的更新说明', forceUpdate: true }, USER_ID),
     ).resolves.toBeUndefined()
   })
 
   it('offline 终态一律拒绝编辑', async () => {
     const { service } = makeService({ apps: [APP], versions: [{ ...DRAFT, status: 'offline' }] })
     await expect(
-      service.update({ id: 'v1', notes: '试图改下线版本' }),
+      service.update({ id: 'v1', notes: '试图改下线版本' }, USER_ID),
     ).rejects.toMatchObject({ code: AppcenterErrorCode.VERSION_STATUS_FORBIDDEN.code })
   })
 
   it('删除仅限草稿：published 应先下线', async () => {
     const { service } = makeService({ apps: [APP], versions: [{ ...DRAFT, status: 'published' }] })
-    await expect(service.remove('v1')).rejects.toMatchObject({
+    await expect(service.remove('v1', USER_ID)).rejects.toMatchObject({
       code: AppcenterErrorCode.VERSION_STATUS_FORBIDDEN.code,
     })
   })
@@ -167,16 +178,23 @@ describe('VersionService（创建与编辑）', () => {
       versions: [DRAFT],
       packages: [{ ...PKG, blockmapObjectKey: 'packages/ah_demo/stable/1.0.0/windows-x64/app.exe.blockmap' }],
     })
-    await expect(service.remove('v1')).resolves.toBeUndefined()
+    await expect(service.remove('v1', USER_ID)).resolves.toBeUndefined()
     expect(deletedObjectKeys).toContain(PKG.ossObjectKey)
     expect(deletedObjectKeys).toContain('packages/ah_demo/stable/1.0.0/windows-x64/app.exe.blockmap')
+  })
+
+  it('数据范围外的版本操作应抛 APP_SCOPE_FORBIDDEN（403 专用码）', async () => {
+    const { service } = makeService({ apps: [APP], versions: [DRAFT], packages: [PKG], scoped: true })
+    await expect(service.publish('v1', USER_ID)).rejects.toMatchObject({
+      code: AppcenterErrorCode.APP_SCOPE_FORBIDDEN.code,
+    })
   })
 })
 
 describe('VersionService（发布前置校验）', () => {
   it('桌面应用无任何包记录应抛 PUBLISH_NO_PACKAGE', async () => {
     const { service } = makeService({ apps: [APP], versions: [DRAFT], packages: [] })
-    await expect(service.publish('v1')).rejects.toMatchObject({
+    await expect(service.publish('v1', USER_ID)).rejects.toMatchObject({
       code: AppcenterErrorCode.PUBLISH_NO_PACKAGE.code,
     })
   })
@@ -187,12 +205,12 @@ describe('VersionService（发布前置校验）', () => {
       versions: [DRAFT],
       packages: [],
     })
-    await expect(service.publish('v1')).resolves.toBeUndefined()
+    await expect(service.publish('v1', USER_ID)).resolves.toBeUndefined()
   })
 
   it('electron 应用缺 sha512 应抛 FRAMEWORK_ARTIFACT_MISSING（主张 A5）', async () => {
     const { service } = makeService({ apps: [APP], versions: [DRAFT], packages: [{ ...PKG, sha512: null }] })
-    await expect(service.publish('v1')).rejects.toMatchObject({
+    await expect(service.publish('v1', USER_ID)).rejects.toMatchObject({
       code: AppcenterErrorCode.FRAMEWORK_ARTIFACT_MISSING.code,
     })
   })
@@ -203,7 +221,7 @@ describe('VersionService（发布前置校验）', () => {
       versions: [DRAFT],
       packages: [{ ...PKG, sha512: null, minisignSignature: null }],
     })
-    await expect(service.publish('v1')).rejects.toMatchObject({
+    await expect(service.publish('v1', USER_ID)).rejects.toMatchObject({
       code: AppcenterErrorCode.FRAMEWORK_ARTIFACT_MISSING.code,
     })
   })
@@ -217,21 +235,21 @@ describe('VersionService（发布前置校验）', () => {
       saved = entity
       return Promise.resolve(entity)
     }
-    await expect(service.publish('v1')).resolves.toBeUndefined()
+    await expect(service.publish('v1', USER_ID)).resolves.toBeUndefined()
     expect(saved?.status).toBe('published')
     expect(saved?.publishedAt).toBeInstanceOf(Date)
   })
 
   it('非 draft 状态不允许发布', async () => {
     const { service } = makeService({ apps: [APP], versions: [{ ...DRAFT, status: 'offline' }], packages: [PKG] })
-    await expect(service.publish('v1')).rejects.toMatchObject({
+    await expect(service.publish('v1', USER_ID)).rejects.toMatchObject({
       code: AppcenterErrorCode.VERSION_STATUS_FORBIDDEN.code,
     })
   })
 
   it('下线仅限已发布版本', async () => {
     const { service } = makeService({ apps: [APP], versions: [DRAFT] })
-    await expect(service.offline('v1')).rejects.toMatchObject({
+    await expect(service.offline('v1', USER_ID)).rejects.toMatchObject({
       code: AppcenterErrorCode.VERSION_STATUS_FORBIDDEN.code,
     })
   })

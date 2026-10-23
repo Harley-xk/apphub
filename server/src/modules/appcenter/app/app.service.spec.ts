@@ -24,12 +24,25 @@ function matches(row: unknown, where: Record<string, unknown> | undefined): bool
       const operator = value as { type: string, value: unknown }
       if (operator.type === 'not')
         return record[key] !== operator.value
+      if (operator.type === 'in')
+        return Array.isArray(operator.value) && (operator.value as unknown[]).includes(record[key])
+      if (operator.type === 'like')
+        return typeof record[key] === 'string' && typeof operator.value === 'string'
+          && record[key].includes(operator.value.replaceAll('%', ''))
     }
     return record[key] === value
   })
 }
 
-function makeService(options: { apps?: AppRow[], publishedCount?: number } = {}) {
+/** 行匹配 where（数组形态为 OR 语义，供 listOptions 的名称 / AppKey 双条件使用） */
+function matchWhere(row: unknown, where: Record<string, unknown> | Record<string, unknown>[] | undefined): boolean {
+  if (!where)
+    return true
+  const conditions = Array.isArray(where) ? where : [where]
+  return conditions.some(condition => matches(row, condition))
+}
+
+function makeService(options: { apps?: AppRow[], publishedCount?: number, scopeAppIds?: string[] | null } = {}) {
   const apps: AppRow[] = (options.apps ?? []).map(row => ({ ...row }))
   const savedChannels: ChannelRow[] = []
   let softRemovedCount = 0
@@ -50,6 +63,12 @@ function makeService(options: { apps?: AppRow[], publishedCount?: number } = {})
   const appRepository = {
     findOne: ({ where }: { where: Record<string, unknown> }) =>
       Promise.resolve(apps.find(app => matches(app, where)) ?? null),
+    find: ({ where }: { where?: Record<string, unknown> | Record<string, unknown>[] }) =>
+      Promise.resolve(apps.filter(app => matchWhere(app, where))),
+    findAndCount: ({ where }: { where?: Record<string, unknown> | Record<string, unknown>[] }) => {
+      const list = apps.filter(app => matchWhere(app, where))
+      return Promise.resolve([list, list.length] as [AppRow[], number])
+    },
     save: (entity: AppRow) => Promise.resolve(entity),
     softRemove: (entity: AppRow) => {
       softRemovedCount++
@@ -63,9 +82,18 @@ function makeService(options: { apps?: AppRow[], publishedCount?: number } = {})
   const versionRepository = {
     count: () => Promise.resolve(options.publishedCount ?? 0),
   }
-  const service = new AppService(appRepository as never, versionRepository as never)
-  return { service, savedChannels, getSoftRemovedCount: () => softRemovedCount }
+  // 数据范围桩：默认 ALL（null），按用例覆盖为 SCOPED 集合
+  const assertAppAllowed = jest.fn(() => Promise.resolve())
+  const appScopeService = {
+    getListAppIds: () => Promise.resolve(options.scopeAppIds === undefined ? null : options.scopeAppIds),
+    assertAppAllowed,
+  }
+  const service = new AppService(appRepository as never, versionRepository as never, appScopeService as never)
+  return { service, savedChannels, assertAppAllowed, getSoftRemovedCount: () => softRemovedCount }
 }
+
+/** 用例通用调用者 id */
+const USER_ID = 'u-1'
 
 describe('AppService', () => {
   it('注册应用应在事务内预置 stable 通道（主张 A1：客户端默认有通道可用）', async () => {
@@ -77,7 +105,7 @@ describe('AppService', () => {
 
   it('按 AppKey 查应用时空值应短路返回 null 且不触达仓储（缺 X-App-Key 不得退化为任意行）', async () => {
     const findOne = jest.fn()
-    const service = new AppService({ findOne } as never, {} as never)
+    const service = new AppService({ findOne } as never, {} as never, {} as never)
     // 运行时缺 X-App-Key 头时 @Headers 装饰器注入 undefined（类型断言模拟该运行时形态）
     await expect(service.findByAppKey(undefined as unknown as string)).resolves.toBeNull()
     await expect(service.findByAppKey('')).resolves.toBeNull()
@@ -95,21 +123,21 @@ describe('AppService', () => {
     const { service } = makeService({
       apps: [{ id: 'a1', appKey: 'ah_demo', appSecret: 'secret-should-not-leak', name: '演示', appType: [], clientType: 'public', status: 'enabled', sort: 0 }],
     })
-    const vo = await service.get('a1')
+    const vo = await service.get('a1', USER_ID)
     expect(Object.keys(vo)).not.toContain('appSecret')
   })
 
   it('重置 Secret 应返回新凭证且与旧值不同（旧凭证立即失效，D22）', async () => {
     const apps: AppRow[] = [{ id: 'a1', appKey: 'ah_demo', appSecret: 'old-secret-0000000000000000', name: '演示', appType: [], clientType: 'public', status: 'enabled', sort: 0 }]
     const { service } = makeService({ apps })
-    const credential = await service.resetSecret('a1')
+    const credential = await service.resetSecret('a1', USER_ID)
     expect(credential.appSecret).toMatch(/^[a-z0-9]{32}$/)
     expect(credential.appSecret).not.toBe(apps[0]?.appSecret)
   })
 
   it('应用不存在应抛 APP_NOT_EXISTS', async () => {
     const { service } = makeService()
-    await expect(service.get('ghost')).rejects.toMatchObject({
+    await expect(service.get('ghost', USER_ID)).rejects.toMatchObject({
       code: AppcenterErrorCode.APP_NOT_EXISTS.code,
     })
   })
@@ -119,7 +147,7 @@ describe('AppService', () => {
       apps: [{ id: 'a1', name: '演示', appType: [], clientType: 'public', status: 'enabled', sort: 0 }],
       publishedCount: 2,
     })
-    await expect(service.remove('a1')).rejects.toMatchObject({
+    await expect(service.remove('a1', USER_ID)).rejects.toMatchObject({
       code: AppcenterErrorCode.APP_HAS_PUBLISHED_VERSION.code,
     })
   })
@@ -128,7 +156,48 @@ describe('AppService', () => {
     const { service, getSoftRemovedCount } = makeService({
       apps: [{ id: 'a1', name: '演示', appType: [], clientType: 'public', status: 'enabled', sort: 0 }],
     })
-    await expect(service.remove('a1')).resolves.toBeUndefined()
+    await expect(service.remove('a1', USER_ID)).resolves.toBeUndefined()
     expect(getSoftRemovedCount()).toBe(1)
+  })
+
+  it('应用列表应按数据范围收窄（SCOPED 仅返回授权应用）', async () => {
+    const { service } = makeService({
+      scopeAppIds: ['a1'],
+      apps: [
+        { id: 'a1', name: '授权应用', appType: [], clientType: 'public', status: 'enabled', sort: 0 },
+        { id: 'a2', name: '未授权应用', appType: [], clientType: 'public', status: 'enabled', sort: 0 },
+      ],
+    })
+    const page = await service.getPage({ pageNo: 1, pageSize: 10 }, USER_ID)
+    expect(page.list.map(app => app.id)).toEqual(['a1'])
+    expect(page.total).toBe(1)
+  })
+
+  it('授权集合为空时应用列表应返回空页（fail-closed，A5）', async () => {
+    const { service } = makeService({ scopeAppIds: [], apps: [{ id: 'a1', name: '任意应用', appType: [], clientType: 'public', status: 'enabled', sort: 0 }] })
+    const page = await service.getPage({ pageNo: 1, pageSize: 10 }, USER_ID)
+    expect(page).toEqual({ list: [], total: 0 })
+  })
+
+  it('应用下拉应同时支持名称与 AppKey 匹配且受数据范围收窄', async () => {
+    const { service } = makeService({
+      scopeAppIds: ['a1', 'a2'],
+      apps: [
+        { id: 'a1', appKey: 'ah_alpha', name: '阿尔法', appType: [], clientType: 'public', status: 'enabled', sort: 0 },
+        { id: 'a2', appKey: 'ah_beta', name: '贝塔', appType: [], clientType: 'public', status: 'enabled', sort: 0 },
+      ],
+    })
+    const byKey = await service.listOptions({ keyword: 'beta' }, USER_ID)
+    expect(byKey.map(app => app.id)).toEqual(['a2'])
+    const byName = await service.listOptions({ keyword: '阿尔法' }, USER_ID)
+    expect(byName.map(app => app.id)).toEqual(['a1'])
+  })
+
+  it('单资源操作应委托数据范围校验（越权由 AppScopeService 抛 403 专用码）', async () => {
+    const { service, assertAppAllowed } = makeService({
+      apps: [{ id: 'a1', name: '演示', appType: [], clientType: 'public', status: 'enabled', sort: 0 }],
+    })
+    await service.get('a1', USER_ID)
+    expect(assertAppAllowed).toHaveBeenCalledWith(USER_ID, 'a1', 'appcenter')
   })
 })

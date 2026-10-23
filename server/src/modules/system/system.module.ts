@@ -13,6 +13,8 @@ import { TypeOrmModule } from '@nestjs/typeorm'
 /** 从 JwtModuleOptions 提取签发参数类型（避免直接依赖传递包 jsonwebtoken，pnpm 严格隔离） */
 type JwtSignOptions = NonNullable<JwtModuleOptions['signOptions']>
 
+import { AppLookupRegistry } from './app-scope/app-lookup.port'
+import { AppScopeService } from './app-scope/app-scope.service'
 import { AuthController } from './auth/auth.controller'
 import { AuthService } from './auth/auth.service'
 import { SystemConfigController } from './config/config.controller'
@@ -30,6 +32,7 @@ import { OperateLogEntity } from './entities/operate-log.entity'
 import { PostEntity } from './entities/post.entity'
 import { RolePermissionEntity } from './entities/role-permission.entity'
 import { RoleEntity } from './entities/role.entity'
+import { UserAppScopeEntity } from './entities/user-app-scope.entity'
 import { UserPostEntity } from './entities/user-post.entity'
 import { UserRoleEntity } from './entities/user-role.entity'
 import { UserEntity } from './entities/user.entity'
@@ -56,6 +59,7 @@ import { DEFAULT_JWT_SECRET } from '../../config/configuration'
       UserEntity,
       RoleEntity,
       UserRoleEntity,
+      UserAppScopeEntity,
       RolePermissionEntity,
       DeptEntity,
       PostEntity,
@@ -101,13 +105,24 @@ import { DEFAULT_JWT_SECRET } from '../../config/configuration'
     SystemConfigService,
     PermissionService,
     PermissionRegistry,
+    // 应用级数据范围：范围判定服务 + 应用查找端口注册表（appcenter 启动期注册实现）
+    AppScopeService,
+    AppLookupRegistry,
     // 异步任务队列：日志异步入库的消费通道（@Global 导出，供认证服务与根作用域的操作日志拦截器注入）
     AsyncTaskQueue,
     OperateLogService,
     LoginLogService,
   ],
   // 导出供全局 Guard / 拦截器（APP_GUARD / APP_INTERCEPTOR 在根模块实例化）解析依赖，形态同 SignatureModule 先例
-  exports: [AuthService, PermissionService, PermissionRegistry, AsyncTaskQueue, OperateLogService],
+  exports: [
+    AuthService,
+    PermissionService,
+    PermissionRegistry,
+    AppScopeService,
+    AppLookupRegistry,
+    AsyncTaskQueue,
+    OperateLogService,
+  ],
 })
 export class SystemModule implements OnModuleInit {
   private readonly logger = new Logger(SystemModule.name)

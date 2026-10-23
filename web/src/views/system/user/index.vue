@@ -85,6 +85,14 @@
             分配角色
           </el-button>
           <el-button
+            v-hasPermi="'system:user:assign-app-scope'"
+            link
+            type="primary"
+            @click="openAssignAppScope(row)"
+          >
+            应用授权
+          </el-button>
+          <el-button
             v-hasPermi="'system:user:delete'"
             link
             type="danger"
@@ -109,6 +117,7 @@
 
     <UserSaveDialog ref="saveDialogRef" @saved="loadTable" />
     <UserRoleDialog ref="roleDialogRef" />
+    <UserAppScopeDialog ref="appScopeDialogRef" />
   </div>
 </template>
 
@@ -125,6 +134,7 @@ import type { ApphubTableColumn } from '@/components/ApphubTable/types'
 import DictSelect from '@/components/DictSelect/index.vue'
 import DictTag from '@/components/DictTag/index.vue'
 import { dateTimeFormatter } from '@/utils/format'
+import UserAppScopeDialog from '@/views/system/user/components/UserAppScopeDialog.vue'
 import UserRoleDialog from '@/views/system/user/components/UserRoleDialog.vue'
 import UserSaveDialog from '@/views/system/user/components/UserSaveDialog.vue'
 
@@ -138,7 +148,7 @@ const columns: ApphubTableColumn[] = [
   { field: 'deptName', title: '所属部门', minWidth: 120 },
   { field: 'status', title: '状态', width: 80, slot: 'status' },
   { field: 'createTime', title: '创建时间', minWidth: 170, formatter: dateTimeFormatter },
-  { field: 'action', title: '操作', width: 260, fixed: 'right', slot: 'action' },
+  { field: 'action', title: '操作', width: 300, fixed: 'right', slot: 'action' },
 ]
 
 const loading = ref(false)
@@ -171,6 +181,7 @@ const deptTreeOptions = computed<TreeOption[]>(() => {
 
 const saveDialogRef = ref<InstanceType<typeof UserSaveDialog>>()
 const roleDialogRef = ref<InstanceType<typeof UserRoleDialog>>()
+const appScopeDialogRef = ref<InstanceType<typeof UserAppScopeDialog>>()
 
 onMounted(() => {
   loadTable()
@@ -236,6 +247,11 @@ function openUpdate(user: UserVO): void {
 
 function openAssignRole(user: UserVO): void {
   roleDialogRef.value?.open(user)
+}
+
+/** 应用授权（仅对数据范围 = 按应用的角色生效） */
+function openAssignAppScope(user: UserVO): void {
+  appScopeDialogRef.value?.open(user)
 }
 
 /** 重置密码：确认后直调（恢复初始口令，无需输入框） */

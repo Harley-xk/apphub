@@ -10,6 +10,8 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger'
 import { CreatePlanDto, PlanPageDto, UpdatePlanDto } from './dto/plan.dto'
 import type { PlanVo } from './dto/plan.dto'
 import { PlanService } from './plan.service'
+import { CurrentUser } from '../../../common/decorators/current-user.decorator'
+import type { AuthUser } from '../../../common/decorators/current-user.decorator'
 import { OperateLog } from '../../../common/decorators/operate-log.decorator'
 import type { PageResult } from '../../../common/interfaces/page-result.interface'
 import { RequirePermissions } from '../../system/permissions'
@@ -23,31 +25,35 @@ export class PlanController {
   @ApiOperation({ summary: '计划分页列表（应用 / 关键字 / 状态筛选）' })
   @RequirePermissions(SUBSCRIPTION_PERMISSION_CODES.PLAN_QUERY)
   @Get()
-  async getPage(@Query() dto: PlanPageDto): Promise<PageResult<PlanVo>> {
-    return this.planService.getPage(dto)
+  async getPage(@Query() dto: PlanPageDto, @CurrentUser() user: AuthUser): Promise<PageResult<PlanVo>> {
+    return this.planService.getPage(dto, user.id)
   }
 
   @ApiOperation({ summary: '新建计划（默认在售）' })
   @OperateLog('订阅计划管理', '新建计划')
   @RequirePermissions(SUBSCRIPTION_PERMISSION_CODES.PLAN_CREATE)
   @Post()
-  async create(@Body() dto: CreatePlanDto): Promise<string> {
-    return this.planService.create(dto)
+  async create(@Body() dto: CreatePlanDto, @CurrentUser() user: AuthUser): Promise<string> {
+    return this.planService.create(dto, user.id)
   }
 
   @ApiOperation({ summary: '编辑计划（改名改价只影响此后新订单）' })
   @OperateLog('订阅计划管理', '编辑计划')
   @RequirePermissions(SUBSCRIPTION_PERMISSION_CODES.PLAN_UPDATE)
   @Put(':id')
-  async update(@Param('id') id: string, @Body() dto: UpdatePlanDto): Promise<void> {
-    await this.planService.update(id, dto)
+  async update(
+    @Param('id') id: string,
+    @Body() dto: UpdatePlanDto,
+    @CurrentUser() user: AuthUser,
+  ): Promise<void> {
+    await this.planService.update(id, dto, user.id)
   }
 
   @ApiOperation({ summary: '删除计划（软删，存量订阅不受影响）' })
   @OperateLog('订阅计划管理', '删除计划')
   @RequirePermissions(SUBSCRIPTION_PERMISSION_CODES.PLAN_REMOVE)
   @Delete(':id')
-  async remove(@Param('id') id: string): Promise<void> {
-    await this.planService.remove(id)
+  async remove(@Param('id') id: string, @CurrentUser() user: AuthUser): Promise<void> {
+    await this.planService.remove(id, user.id)
   }
 }

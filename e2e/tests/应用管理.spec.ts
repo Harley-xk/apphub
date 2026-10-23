@@ -224,6 +224,30 @@ test.describe('应用中心', () => {
     await expect(pkgRow).toBeVisible()
     await expect(pkgRow.getByText('Windows')).toBeVisible()
     await expect(pkgRow.locator('.el-tag--success').filter({ hasText: 'sha512' })).toBeVisible()
+
+    // 下载动作：签发签名 URL（mock）→ 浏览器按原始文件名下载（草稿 / 已发布 / 已下线均可下载）
+    await page.route('**/api/appcenter/version/*/package/*/download-url', async (route) => {
+      await route.fulfill({
+        json: okBody({
+          url: `https://oss-download-mock.example.com/${fileName}?Signature=e2e`,
+          fileName,
+          expiresIn: 7200,
+        }),
+      })
+    })
+    await page.route('**/oss-download-mock.example.com/**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        headers: { 'content-disposition': `attachment; filename="${fileName}"` },
+        body: 'e2e-mock-package-body',
+      })
+    })
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      clickRowAction(page, pkgRow, '下载'),
+    ])
+    expect(download.suggestedFilename()).toBe(fileName)
+
     await pkgDrawer.locator('.el-drawer__close-btn').click()
 
     // 清理闭环：删除草稿版本 → 返回删除应用

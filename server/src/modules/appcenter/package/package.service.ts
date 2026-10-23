@@ -11,7 +11,12 @@ import type { FindOptionsWhere, Repository } from 'typeorm'
 
 import { businessError } from '../../../common/exceptions/business-error'
 import { AppService } from '../app/app.service'
-import { buildPackageObjectKey, PACKAGE_PLATFORM, VERSION_STATUS } from '../appcenter.constants'
+import {
+  buildPackageObjectKey,
+  PACKAGE_DOWNLOAD_EXPIRES_SECONDS,
+  PACKAGE_PLATFORM,
+  VERSION_STATUS,
+} from '../appcenter.constants'
 import { AppChannelEntity } from '../entities/app-channel.entity'
 import { AppPackageEntity } from '../entities/app-package.entity'
 import { AppVersionEntity } from '../entities/app-version.entity'
@@ -19,7 +24,13 @@ import { AppEntity } from '../entities/app.entity'
 import { AppcenterErrorCode } from '../error-codes'
 import { STORAGE_SERVICE } from '../storage/storage.service'
 import type { StorageService } from '../storage/storage.service'
-import type { PackageRegisterDto, PackageUploadTokenDto, PackageUploadTokenVo, PackageVo } from './dto/package.dto'
+import type {
+  PackageDownloadVo,
+  PackageRegisterDto,
+  PackageUploadTokenDto,
+  PackageUploadTokenVo,
+  PackageVo,
+} from './dto/package.dto'
 
 @Injectable()
 export class PackageService {
@@ -48,6 +59,31 @@ export class PackageService {
       order: { createTime: 'ASC' },
     })
     return packages.map(pkg => this.toVo(pkg))
+  }
+
+  /**
+   * 管理端下载：签发安装包签名 URL（任意版本状态均可下载——已发版产物需可随时取回复核；
+   * ios 元信息包无安装包文件拒绝）。数据范围校验经 versionId → appId 反查。
+   */
+  async getDownloadUrl(versionId: string, pkgId: string, userId: string): Promise<PackageDownloadVo> {
+    const pkg = await this.packageRepository.findOne({ where: { id: pkgId, versionId } })
+    if (!pkg) {
+      throw businessError(AppcenterErrorCode.PACKAGE_NOT_EXISTS.message, {
+        code: AppcenterErrorCode.PACKAGE_NOT_EXISTS,
+      })
+    }
+    const version = await this.getExistsVersion(versionId)
+    await this.appService.assertAccessible(userId, version.appId)
+    if (!pkg.ossObjectKey) {
+      throw businessError(AppcenterErrorCode.PACKAGE_OBJECT_MISSING.message, {
+        code: AppcenterErrorCode.PACKAGE_OBJECT_MISSING,
+      })
+    }
+    return {
+      url: this.storageService.signGetUrl(pkg.ossObjectKey, PACKAGE_DOWNLOAD_EXPIRES_SECONDS, pkg.fileName),
+      fileName: pkg.fileName,
+      expiresIn: PACKAGE_DOWNLOAD_EXPIRES_SECONDS,
+    }
   }
 
   /** 签发直传凭证：draft 校验 + (platform, arch) 占用校验 + 对象键生成下发（A3 直传方案） */

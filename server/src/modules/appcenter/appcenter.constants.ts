@@ -51,6 +51,9 @@ export const VERSION_STATUS = {
 /** 创建应用时自动预置的默认通道 code（不可删除，主张 A1） */
 export const STABLE_CHANNEL_CODE = 'stable'
 
+/** 安装包签名下载 URL 时效：2h（与开放更新协议 / D24 适配端点同口径，设计 §2.5） */
+export const PACKAGE_DOWNLOAD_EXPIRES_SECONDS = 2 * 60 * 60
+
 /** 通道与应用状态共用值 */
 export const CHANNEL_STATUS = APP_STATUS
 

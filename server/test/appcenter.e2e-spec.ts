@@ -535,7 +535,7 @@ describe('AppcenterModule (e2e)', () => {
       .get(`/api/appcenter/version/${versionId}/package`)
       .set('Authorization', `Bearer ${adminToken}`)
       .expect(200)
-    const pkgs = (packageList.body as ApiResponse<{ fileSize: number }[]>).data!
+    const pkgs = (packageList.body as ApiResponse<{ id: string, fileSize: number }[]>).data!
     expect(pkgs).toHaveLength(1)
     expect(pkgs[0]?.fileSize).toBe(1048576)
 
@@ -544,6 +544,25 @@ describe('AppcenterModule (e2e)', () => {
       .post(`/api/appcenter/version/${versionId}/publish`)
       .set('Authorization', `Bearer ${adminToken}`)
       .expect(200)
+
+    // 管理端下载：已发布版本的包也可签发签名 URL（下载不限版本状态）
+    const downloadRes = await request(server)
+      .get(`/api/appcenter/version/${versionId}/package/${pkgs[0].id}/download-url`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(200)
+    const download = (downloadRes.body as ApiResponse<{ url: string, fileName: string, expiresIn: number }>).data!
+    expect(download.url).toContain(expectedKey)
+    expect(download.fileName).toBe('app-setup-1.3.0.exe')
+    expect(download.expiresIn).toBe(7200)
+
+    // 包记录不存在（300400005）
+    await request(server)
+      .get(`/api/appcenter/version/${versionId}/package/ghost/download-url`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(400)
+      .expect((res) => {
+        expect((res.body as ApiResponse<unknown>).code).toBe(300400005)
+      })
 
     // published 仅允许改说明与强制标记（300300004）
     await request(server)

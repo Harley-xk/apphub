@@ -48,6 +48,16 @@ export interface PackageVo {
   createTime: Date
 }
 
+/** 安装包下载出参（签名 URL 动态签发不落库，expiresIn 为秒数供前端提示） */
+export interface PackageDownloadVo {
+  /** OSS 签名下载 URL（浏览器直连，携带原始文件名下载） */
+  url: string
+  /** 原始文件名（与 url 的 Content-Disposition 一致） */
+  fileName: string
+  /** 链接有效期（秒） */
+  expiresIn: number
+}
+
 /** 直传凭证申请入参 */
 export class PackageUploadTokenDto {
   @ApiProperty({ description: '平台（可直传：windows / macos / linux / android）', example: 'windows' })

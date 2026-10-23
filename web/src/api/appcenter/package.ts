@@ -2,7 +2,7 @@
  * 作者: Harley-xk
  * 创建: 2026-10-16
  *
- * 描述: 版本包接口封装：列表 / STS 直传凭证签发 / 登记回调 / 删除（上传与登记仅草稿版本）
+ * 描述: 版本包接口封装：列表 / 下载 URL 签发 / STS 直传凭证签发 / 登记回调 / 删除（上传与登记仅草稿版本，下载不限状态）
  */
 import { http } from '@/api/http'
 
@@ -27,6 +27,16 @@ export interface PackageVO {
   blockmapSha512: string | null
   blockmapFileSize: number | null
   createTime: number
+}
+
+/** 安装包下载链接（后端动态签发签名 URL，2h 有效，不落库） */
+export interface PackageDownloadVO {
+  /** OSS 签名下载 URL（浏览器直连，携带原始文件名强制下载） */
+  url: string
+  /** 原始文件名（与 url 的 Content-Disposition 一致） */
+  fileName: string
+  /** 链接有效期（秒） */
+  expiresIn: number
 }
 
 /** STS 直传凭证（后端 PackageUploadTokenVo：对象键由后端生成下发，前端不自由拼键） */
@@ -65,6 +75,12 @@ export interface PackageRegisterData {
 
 export async function getPackageList(versionId: string): Promise<PackageVO[]> {
   const { data } = await http.get<PackageVO[]>(`/appcenter/version/${versionId}/package`)
+  return data!
+}
+
+/** 签发安装包下载 URL（任意版本状态可下载，ios 元信息包后端拒绝） */
+export async function getPackageDownloadUrl(versionId: string, pkgId: string): Promise<PackageDownloadVO> {
+  const { data } = await http.get<PackageDownloadVO>(`/appcenter/version/${versionId}/package/${pkgId}/download-url`)
   return data!
 }
 

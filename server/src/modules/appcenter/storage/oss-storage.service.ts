@@ -18,6 +18,15 @@ const DEFAULT_SIGN_EXPIRES_SECONDS = 2 * 60 * 60
 /** STS 凭证时效：1h（大文件分片续传中过期由前端 STS provider 自动刷新重取） */
 const STS_DURATION_SECONDS = 3600
 
+/**
+ * Content-Disposition 取值：ASCII 兜底名 + RFC 5987 UTF-8 文件名。
+ * 旧客户端读 filename，现代浏览器优先 filename*（中文 / 空格等原始文件名无损）。
+ */
+function buildContentDisposition(fileName: string): string {
+  const asciiFallback = fileName.replace(/[^\x20-\x7E]/g, '_').replace(/["\\]/g, '_')
+  return `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodeURIComponent(fileName)}`
+}
+
 export interface OssStorageOptions {
   region: string
   bucket: string
@@ -116,8 +125,19 @@ export class OssStorageService implements StorageService {
     }
   }
 
-  signGetUrl(objectKey: string, expiresSeconds = DEFAULT_SIGN_EXPIRES_SECONDS): string {
-    return this.client.signatureUrl(objectKey, { expires: expiresSeconds })
+  signGetUrl(
+    objectKey: string,
+    expiresSeconds = DEFAULT_SIGN_EXPIRES_SECONDS,
+    downloadFileName?: string,
+  ): string {
+    // 管理端下载：response-content-disposition 覆盖响应头，浏览器按原始文件名落盘且不预览
+    const response = downloadFileName
+      ? { 'content-disposition': buildContentDisposition(downloadFileName) }
+      : undefined
+    return this.client.signatureUrl(objectKey, {
+      expires: expiresSeconds,
+      ...(response ? { response } : {}),
+    })
   }
 
   /** 创建 OSS 客户端（桩注入点：单测替换 client 观测 headObject / deleteObject 错误映射） */

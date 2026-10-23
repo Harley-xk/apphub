@@ -41,6 +41,10 @@ export interface StorageService {
   /** 删除对象：对象不存在视为成功（删包幂等） */
   deleteObject(objectKey: string): Promise<void>
 
-  /** 生成签名下载 URL（默认 2h；下载地址动态生成不落库） */
-  signGetUrl(objectKey: string, expiresSeconds?: number): string
+  /**
+   * 生成签名下载 URL（默认 2h；下载地址动态生成不落库）。
+   * downloadFileName 传入时经 OSS 响应头覆盖（response-content-disposition）强制以该文件名下载，
+   * 供管理端安装包下载保持登记时的原始文件名（中文 / 空格等特殊字符经 RFC 5987 编码）。
+   */
+  signGetUrl(objectKey: string, expiresSeconds?: number, downloadFileName?: string): string
 }

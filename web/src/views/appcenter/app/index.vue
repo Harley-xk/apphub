@@ -2,7 +2,7 @@
   作者: Harley-xk
   创建: 2026-10-16
 
-  描述: 应用管理页：搜索分页 + 注册（凭证仅此一次）/ 编辑 / 启停 / 重置凭证 / 删除 / 通道抽屉
+  描述: 应用管理页：搜索分页 + 注册 / 编辑 / 启停 / 查看与重置凭证 / 删除 / 通道抽屉
 -->
 <template>
   <div class="page-container">
@@ -70,6 +70,14 @@
         </template>
         <template #appKey="{ row }">
           <code class="app-key">{{ row.appKey }}</code>
+        </template>
+        <!-- 列表恒为掩码：完整值经独立端点按需拉取（不随列表响应下发） -->
+        <template #appSecret="{ row }">
+          <el-tooltip content="点击查看完整 AppSecret" placement="top">
+            <el-button link type="primary" class="secret-mask" @click="openSecret(row)">
+              ****
+            </el-button>
+          </el-tooltip>
         </template>
         <template #framework="{ row }">
           {{ row.framework ? FRAMEWORK_LABELS[row.framework] ?? row.framework : '-' }}
@@ -150,7 +158,7 @@ import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import type { AppCredentialVO, AppVO } from '@/api/appcenter/app'
-import { deleteApp, getAppPage, resetAppSecret, updateAppStatus } from '@/api/appcenter/app'
+import { deleteApp, getAppPage, getAppSecret, resetAppSecret, updateAppStatus } from '@/api/appcenter/app'
 import ApphubTable from '@/components/ApphubTable/index.vue'
 import type { ApphubTableColumn } from '@/components/ApphubTable/types'
 import { dateTimeFormatter } from '@/utils/format'
@@ -181,6 +189,7 @@ const FRAMEWORK_LABELS: Record<string, string> = {
 const columns: ApphubTableColumn[] = [
   { field: 'name', title: '应用名称', minWidth: 200, slot: 'name' },
   { field: 'appKey', title: 'AppKey', width: 200, slot: 'appKey' },
+  { field: 'appSecret', title: 'AppSecret', width: 120, slot: 'appSecret' },
   { field: 'framework', title: '技术框架', width: 110, slot: 'framework' },
   { field: 'clientType', title: '调用方类型', width: 120, slot: 'clientType' },
   { field: 'status', title: '状态', width: 80, slot: 'status' },
@@ -263,9 +272,15 @@ function openUpdate(app: AppVO): void {
   saveDialogRef.value?.open(app)
 }
 
-/** 注册成功：AppSecret 仅此一次，立即弹凭证展示 */
+/** 注册成功：立即弹凭证展示（完整值此后可随时经列表点击查看） */
 function handleCreated(credential: AppCredentialVO): void {
   credentialDialogRef.value?.open(credential, 'created')
+}
+
+/** 点击列表 **** 掩码：按需拉取完整凭证后弹窗展示 */
+async function openSecret(app: AppVO): Promise<void> {
+  const credential = await getAppSecret(app.id)
+  credentialDialogRef.value?.open(credential, 'view')
 }
 
 function openChannelDrawer(app: AppVO): void {
@@ -344,5 +359,10 @@ async function handleDelete(app: AppVO): Promise<void> {
 .app-key {
   font-family: ui-monospace, SFMono-Regular, Consolas, 'Courier New', monospace;
   font-size: 13px;
+}
+
+.secret-mask {
+  font-family: ui-monospace, SFMono-Regular, Consolas, 'Courier New', monospace;
+  letter-spacing: 1px;
 }
 </style>

@@ -93,7 +93,17 @@ export class AppService {
   }
 
   /**
-   * 注册应用：生成 AppKey / Secret 并在事务内预置 stable 通道（主张 A1），响应携带完整凭证（仅此一次）。
+   * 查看完整凭证（列表 `****` 掩码的按需数据源）：经数据范围校验后返回明文。
+   * 单独端点而非并入列表 / 详情出参——Secret 不随每次列表刷新进入浏览器网络面板；
+   * 调用方（控制器）负责记操作日志「查看应用凭证」。
+   */
+  async getSecret(id: string, userId: string): Promise<AppCredentialVo> {
+    const app = await this.assertAccessible(userId, id)
+    return { id: app.id, appKey: app.appKey, appSecret: app.appSecret }
+  }
+
+  /**
+   * 注册应用：生成 AppKey / Secret 并在事务内预置 stable 通道（主张 A1），响应携带完整凭证（列表恒为掩码，完整值可随时经 getSecret 查看）。
    */
   async create(dto: AppCreateDto): Promise<AppCredentialVo> {
     const appKey = generateAppKey()
@@ -147,7 +157,7 @@ export class AppService {
     await this.appRepository.save(app)
   }
 
-  /** 重置 Secret：旧 Secret 立即失效（D22），响应携带新完整凭证（仅此一次） */
+  /** 重置 Secret：旧 Secret 立即失效（D22），响应携带新完整凭证 */
   async resetSecret(id: string, userId: string): Promise<AppCredentialVo> {
     const app = await this.assertAccessible(userId, id)
     app.appSecret = generateAppSecret()

@@ -153,7 +153,7 @@ async function handleSubmit(): Promise<void> {
       emit('saved')
     }
     else {
-      // 注册响应完整凭证（AppSecret 仅此一次），交由父页弹出凭证展示
+      // 注册响应完整凭证，交由父页弹出凭证展示（此后可随时经列表点击查看）
       const credential = await createApp({
         name: form.name,
         appType: form.appType,

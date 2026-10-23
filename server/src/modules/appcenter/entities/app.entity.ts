@@ -16,7 +16,7 @@ export class AppEntity extends BaseEntity {
   @Column({ type: 'varchar', length: 32 })
   appKey: string
 
-  /** 调用凭证：32 位随机串，明文存库；管理端仅创建 / 重置后完整显示一次 */
+  /** 调用凭证：32 位随机串，明文存库；管理端列表以 **** 掩码展示，点击后按需查看完整值 */
   @Column({ type: 'varchar', length: 64 })
   appSecret: string
 

@@ -285,7 +285,7 @@ describe('AppcenterModule (e2e)', () => {
     await app.close()
   })
 
-  it('注册应用应响应完整凭证并预置 stable 通道（凭证仅此一次，主张 A1）', async () => {
+  it('注册应用应响应完整凭证并预置 stable 通道（主张 A1）', async () => {
     const res = await request(server)
       .post('/api/appcenter/app')
       .set('Authorization', `Bearer ${adminToken}`)
@@ -304,6 +304,13 @@ describe('AppcenterModule (e2e)', () => {
       .expect(200)
     const body = page.body as ApiResponse<PageResult<Record<string, unknown>>>
     expect(body.data?.list[0]?.appSecret).toBeUndefined()
+
+    // 完整凭证经独立端点按需查看（列表 **** 掩码的数据源，与注册响应一致）
+    const secretRes = await request(server)
+      .get(`/api/appcenter/app/${appId}/secret`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(200)
+    expect((secretRes.body as ApiResponse<{ appSecret: string }>).data?.appSecret).toBe(credential.appSecret)
 
     // 创建即预置 stable 通道
     const channelList = await request(server)
@@ -376,6 +383,12 @@ describe('AppcenterModule (e2e)', () => {
       .expect(forbidden)
     await request(server)
       .get(`/api/appcenter/app/${otherAppId}/channel`)
+      .set('Authorization', `Bearer ${appAdminToken}`)
+      .expect(403)
+      .expect(forbidden)
+    // 查看凭证同样受数据范围收口（不得借查看端点越权取 Secret）
+    await request(server)
+      .get(`/api/appcenter/app/${otherAppId}/secret`)
       .set('Authorization', `Bearer ${appAdminToken}`)
       .expect(403)
       .expect(forbidden)

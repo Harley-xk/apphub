@@ -113,10 +113,23 @@ describe('applyColumnState', () => {
     expect(result.map(col => col.field)).toEqual(['b', 'a', 'c'])
   })
 
-  it('代码新增列按原相对顺序追加尾部', () => {
+  it('代码新增列按原相对顺序追加尾部（无固定列时）', () => {
     const withNew = [...columns, { field: 'new' as const, title: 'N' }, { field: 'new2' as const, title: 'N2' }]
     const result = applyColumnState(withNew, { order: ['b', 'c', 'a'], widths: {} })
     expect(result.map(col => col.field)).toEqual(['b', 'c', 'a', 'new', 'new2'])
+  })
+
+  it('新增列不得排到 fixed right 操作列之外（固定列须保持居尾）', () => {
+    const withAction = [
+      { field: 'a', title: 'A' },
+      { field: 'b', title: 'B' },
+      { field: 'c', title: 'C' },
+      { field: 'action', title: '操作', fixed: 'right' as const },
+      { field: 'new', title: 'N' },
+    ]
+    // 旧持久化记录：新列与操作列均不在 order 中（模拟升级发版后新增列）
+    const result = applyColumnState(withAction, { order: ['a', 'b', 'c'], widths: {} })
+    expect(result.map(col => col.field)).toEqual(['a', 'b', 'c', 'new', 'action'])
   })
 
   it('非法存储宽度（非正数）不覆盖', () => {

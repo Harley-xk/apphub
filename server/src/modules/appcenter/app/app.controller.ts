@@ -2,7 +2,7 @@
  * 作者: Harley-xk
  * 创建: 2026-10-16
  *
- * 描述: 应用控制器：分页 / 详情 / 注册 / 编辑 / 启停 / 凭证重置 / 删除（注册与重置响应完整凭证，仅此一次）
+ * 描述: 应用控制器：分页 / 详情 / 查看凭证 / 注册 / 编辑 / 启停 / 凭证重置 / 删除（列表和详情不含 Secret，完整凭证经查看 / 注册 / 重置返回）
  */
 import { Body, Controller, Delete, Get, Param, Post, Put, Query } from '@nestjs/common'
 import { ApiOperation, ApiTags } from '@nestjs/swagger'
@@ -47,7 +47,16 @@ export class AppController {
     return this.appService.get(id, user.id)
   }
 
-  @ApiOperation({ summary: '注册应用（响应含完整凭证，仅此一次）' })
+  // 两段路径 `:id/secret` 与单段 `GET :id` 不冲突（单段路由不匹配多段路径）
+  @ApiOperation({ summary: '查看应用完整凭证（列表 **** 掩码的按需数据源）' })
+  @OperateLog('应用管理', '查看应用凭证')
+  @RequirePermissions(APPCENTER_PERMISSION_CODES.APP_QUERY)
+  @Get(':id/secret')
+  async getSecret(@Param('id') id: string, @CurrentUser() user: AuthUser): Promise<AppCredentialVo> {
+    return this.appService.getSecret(id, user.id)
+  }
+
+  @ApiOperation({ summary: '注册应用（响应含完整凭证）' })
   @OperateLog('应用管理', '注册应用')
   @RequirePermissions(APPCENTER_PERMISSION_CODES.APP_CREATE)
   @Post()
@@ -71,7 +80,7 @@ export class AppController {
     await this.appService.updateStatus(id, dto.status, user.id)
   }
 
-  @ApiOperation({ summary: '重置 Secret（旧凭证立即失效，响应含新完整凭证，仅此一次）' })
+  @ApiOperation({ summary: '重置 Secret（旧凭证立即失效，响应含新完整凭证）' })
   @OperateLog('应用管理', '重置应用凭证')
   @RequirePermissions(APPCENTER_PERMISSION_CODES.APP_RESET_SECRET)
   @Put(':id/secret')

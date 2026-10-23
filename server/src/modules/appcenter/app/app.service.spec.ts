@@ -112,11 +112,28 @@ describe('AppService', () => {
     expect(findOne).not.toHaveBeenCalled()
   })
 
-  it('注册应用应响应完整凭证（创建后仅此一次可见，D22）', async () => {
+  it('注册应用应响应完整凭证', async () => {
     const { service } = makeService()
     const credential = await service.create(CREATE_DTO)
     expect(credential.appKey).toMatch(/^ah_[a-z0-9]{16}$/)
     expect(credential.appSecret).toMatch(/^[a-z0-9]{32}$/)
+  })
+
+  it('查看凭证应按需返回明文且经数据范围校验（越权查看须被拒）', async () => {
+    const { service, assertAppAllowed } = makeService({
+      apps: [{ id: 'a1', appKey: 'ah_demo', appSecret: 'plain-secret-000000000000000000', name: '演示', appType: [], clientType: 'public', status: 'enabled', sort: 0 }],
+    })
+    const credential = await service.getSecret('a1', USER_ID)
+    expect(credential).toEqual({ id: 'a1', appKey: 'ah_demo', appSecret: 'plain-secret-000000000000000000' })
+    expect(assertAppAllowed).toHaveBeenCalledWith(USER_ID, 'a1', 'appcenter')
+  })
+
+  it('数据范围外查看凭证应在校验处失败且不出参 Secret（先拒后取）', async () => {
+    const { service, assertAppAllowed } = makeService({
+      apps: [{ id: 'a1', appKey: 'ah_demo', appSecret: 'should-not-leak-0000000000000000', name: '演示', appType: [], clientType: 'public', status: 'enabled', sort: 0 }],
+    })
+    assertAppAllowed.mockRejectedValueOnce(new Error('forbidden'))
+    await expect(service.getSecret('a1', USER_ID)).rejects.toThrow('forbidden')
   })
 
   it('应用详情出参不得携带 Secret（敏感信息不得泄漏）', async () => {

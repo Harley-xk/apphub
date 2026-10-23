@@ -2,7 +2,7 @@
  * 作者: Harley-xk
  * 创建: 2026-10-16
  *
- * 描述: 应用域 DTO 集：分页 / 创建 / 更新 / 状态入参与出参契约（凭证仅创建 / 重置后完整返回一次）
+ * 描述: 应用域 DTO 集：分页 / 创建 / 更新 / 状态入参与出参契约（列表和详情不含 Secret，完整凭证经查看 / 创建 / 重置返回）
  */
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import { Type } from 'class-transformer'
@@ -40,7 +40,7 @@ export interface AppVo {
   createTime: Date
 }
 
-/** 应用凭证出参：完整凭证仅在创建 / 重置 Secret 后返回一次（之后不可再查，D22） */
+/** 应用凭证出参：查看凭证 / 创建 / 重置 Secret 三处共用（重置即旧凭证失效，D22） */
 export interface AppCredentialVo {
   id: string
   appKey: string

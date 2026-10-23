@@ -61,9 +61,9 @@ test.describe('应用中心', () => {
     await expect(row.locator('.el-tag--warning')).toHaveText('公开客户端')
     await expect(row.getByText('Electron')).toBeVisible()
 
-    // 通道抽屉：stable 预置且删除禁用；新增 beta 通道后可删
-    await row.getByRole('button', { name: '更多' }).click()
-    await page.getByRole('menuitem', { name: '更新通道' }).click()
+    // 通道抽屉：默认列宽下「更新通道」为一级可见动作（不再藏进下拉），stable 预置且删除禁用
+    await expect(row.getByRole('button', { name: '更新通道', exact: true })).toBeVisible()
+    await clickRowAction(page, row, '更新通道')
     const drawer = page.locator('.el-drawer').filter({ hasText: '更新通道' })
     await expect(drawer).toBeVisible()
     const stableRow = drawer.locator('.vxe-body--row').filter({ hasText: 'stable' })
@@ -93,8 +93,7 @@ test.describe('应用中心', () => {
 
     // 删除闭环（无已发布版本允许删）
     const renamed = page.locator('.vxe-body--row').filter({ hasText: `${name}改` }).first()
-    await renamed.getByRole('button', { name: '更多' }).click()
-    await page.getByRole('menuitem', { name: '删除应用' }).click()
+    await clickRowAction(page, renamed, '删除应用')
     await page.locator('.el-message-box').getByRole('button', { name: '确定' }).click()
     await expect(page.locator('.el-message').getByText('删除成功')).toBeVisible()
     await expect(page.locator('.vxe-body--row').filter({ hasText: `${name}改` })).toHaveCount(0)
@@ -224,8 +223,7 @@ test.describe('应用中心', () => {
     await page.getByRole('button', { name: '← 返回应用列表' }).click()
     await expect(page).toHaveURL(/\/appcenter\/app$/)
     const cleanupRow = page.locator('.vxe-body--row').filter({ hasText: name }).first()
-    await cleanupRow.getByRole('button', { name: '更多' }).click()
-    await page.getByRole('menuitem', { name: '删除应用' }).click()
+    await clickRowAction(page, cleanupRow, '删除应用')
     await page.locator('.el-message-box').getByRole('button', { name: '确定' }).click()
     await expect(page.locator('.vxe-body--row').filter({ hasText: name })).toHaveCount(0)
   })

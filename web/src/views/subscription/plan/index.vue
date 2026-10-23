@@ -40,15 +40,15 @@
             重置
           </el-button>
         </el-form-item>
+        <el-form-item>
+          <el-button v-hasPermi="'subscription:plan:create'" type="primary" @click="openSave()">
+            新增计划
+          </el-button>
+        </el-form-item>
       </el-form>
     </el-card>
 
     <el-card class="table-card">
-      <div class="table-toolbar">
-        <el-button v-hasPermi="'subscription:plan:create'" type="primary" @click="openSave()">
-          新增计划
-        </el-button>
-      </div>
       <ApphubTable :columns="columns" :data="tableData" :loading="loading">
         <template #name="{ row }">
           <div class="plan-name-cell">

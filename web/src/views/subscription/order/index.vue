@@ -54,19 +54,16 @@
             重置
           </el-button>
         </el-form-item>
+        <el-form-item>
+          <el-button v-hasPermi="'subscription:order:offline-create'" type="primary" @click="offlineDialogRef?.open()">
+            线下收款备案
+          </el-button>
+        </el-form-item>
       </el-form>
     </el-card>
 
     <el-card class="table-card">
-      <div class="table-toolbar">
-        <el-button v-hasPermi="'subscription:order:offline-create'" type="primary" @click="offlineDialogRef?.open()">
-          线下收款备案
-        </el-button>
-      </div>
       <ApphubTable :columns="columns" :data="tableData" :loading="loading">
-        <template #orderNo="{ row }">
-          <span class="order-no">{{ row.orderNo }}</span>
-        </template>
         <template #planName="{ row }">
           <div class="plan-name-cell">
             <span>{{ row.planName }}</span>
@@ -147,7 +144,7 @@ defineOptions({ name: 'SubscriptionOrder' })
 
 /** 列定义（field 即列宽 / 列序持久化标识，设计见 docs/前端/表格组件设计.md） */
 const columns: ApphubTableColumn[] = [
-  { field: 'orderNo', title: '订单号', width: 220, slot: 'orderNo' },
+  { field: 'orderNo', title: '订单号', width: 220 },
   { field: 'memberNickname', title: '会员', minWidth: 130 },
   { field: 'appName', title: '应用', minWidth: 140 },
   { field: 'planName', title: '计划（快照）', minWidth: 190, slot: 'planName' },
@@ -269,10 +266,6 @@ async function handleClose(order: OrderVO): Promise<void> {
 </script>
 
 <style scoped>
-.order-no {
-  font-family: var(--apphub-font-mono, monospace);
-}
-
 .plan-name-cell {
   display: flex;
   align-items: center;

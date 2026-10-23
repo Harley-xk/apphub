@@ -96,7 +96,7 @@ const columns: ApphubTableColumn[] = [
   { field: 'verified', title: '验证', width: 70, slot: 'verified' },
   { field: 'lastUsedAt', title: '最近使用', width: 150, formatter: dateTimeFormatter },
   { field: 'createTime', title: '绑定时间', width: 150, formatter: dateTimeFormatter },
-  { field: 'action', title: '操作', width: 60, fixed: 'right', slot: 'action' },
+  { field: 'action', title: '操作', width: 80, fixed: 'right', slot: 'action' },
 ]
 
 const visible = ref(false)

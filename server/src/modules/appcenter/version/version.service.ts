@@ -13,12 +13,13 @@ import type { FindOptionsWhere, Repository } from 'typeorm'
 import { businessError } from '../../../common/exceptions/business-error'
 import type { PageResult } from '../../../common/interfaces/page-result.interface'
 import { AppService } from '../app/app.service'
-import { APP_FRAMEWORK, CHANNEL_STATUS, PACKAGE_PLATFORM, VERSION_STATUS } from '../appcenter.constants'
+import { CHANNEL_STATUS, PACKAGE_PLATFORM, VERSION_STATUS } from '../appcenter.constants'
 import { AppChannelEntity } from '../entities/app-channel.entity'
 import { AppPackageEntity } from '../entities/app-package.entity'
 import { AppVersionEntity } from '../entities/app-version.entity'
 import { AppEntity } from '../entities/app.entity'
 import { AppcenterErrorCode } from '../error-codes'
+import { assertFrameworkArtifacts } from '../package/package-artifacts.util'
 import { STORAGE_SERVICE } from '../storage/storage.service'
 import type { StorageService } from '../storage/storage.service'
 import type { VersionCreateDto, VersionPageDto, VersionUpdateDto, VersionVo } from './dto/version.dto'
@@ -160,7 +161,7 @@ export class VersionService {
     }
 
     // 前置校验三：框架产物完整性（主张 A5：产物只能构建时生成，缺失返回 003004003）
-    this.assertFrameworkArtifacts(app, packages)
+    assertFrameworkArtifacts(app.framework, packages)
 
     version.status = VERSION_STATUS.PUBLISHED
     version.publishedAt = new Date()
@@ -247,22 +248,6 @@ export class VersionService {
       throw businessError(AppcenterErrorCode.VERSION_DUPLICATE.message, {
         code: AppcenterErrorCode.VERSION_DUPLICATE,
       })
-    }
-  }
-
-  /** 框架产物完整性校验（electron 须 sha512 / tauri 须 minisign，主张 A5） */
-  private assertFrameworkArtifacts(app: AppEntity, packages: AppPackageEntity[]): void {
-    for (const pkg of packages) {
-      if (app.framework === APP_FRAMEWORK.ELECTRON && !pkg.sha512) {
-        throw businessError(`框架产物缺失：electron 应用的 ${pkg.platform} 包缺少 sha512（D24，electron-updater 校验必需）`, {
-          code: AppcenterErrorCode.FRAMEWORK_ARTIFACT_MISSING,
-        })
-      }
-      if (app.framework === APP_FRAMEWORK.TAURI && !pkg.minisignSignature) {
-        throw businessError(`框架产物缺失：tauri 应用的 ${pkg.platform} 包缺少 minisign 签名（D24，tauri updater 验签必需）`, {
-          code: AppcenterErrorCode.FRAMEWORK_ARTIFACT_MISSING,
-        })
-      }
     }
   }
 

@@ -7,14 +7,14 @@
 import { Body, Controller, Delete, Param, Post, Put } from '@nestjs/common'
 import { ApiOperation, ApiTags } from '@nestjs/swagger'
 
+import { VersionUpdateDto } from './dto/version.dto'
+import { VersionService } from './version.service'
 import { CurrentUser } from '../../../common/decorators/current-user.decorator'
 import type { AuthUser } from '../../../common/decorators/current-user.decorator'
 import { OperateLog } from '../../../common/decorators/operate-log.decorator'
 import { RequirePermissions } from '../../system/permissions'
 import { APPCENTER_PERMISSION_CODES } from '../permissions'
 // 注意：作为 @Query()/@Body() 元类型的 DTO 类必须值导入（import type 会在运行时擦除）
-import { VersionUpdateDto } from './dto/version.dto'
-import { VersionService } from './version.service'
 
 @ApiTags('应用管理')
 @Controller('appcenter/version')

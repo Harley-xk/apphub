@@ -1,11 +1,11 @@
 import { describe, expect, it, jest } from '@jest/globals'
 import * as bcrypt from 'bcryptjs'
 
+import type { MemberCredentialEntity } from '../entities/member-credential.entity'
+import type { MemberEntity } from '../entities/member.entity'
 import { MemberErrorCode } from '../error-codes'
 import { CREDENTIAL_TYPE, MEMBER_STATUS } from '../member.constants'
 import { maskIdentifier, MemberAdminService } from './member-admin.service'
-import type { MemberCredentialEntity } from '../entities/member-credential.entity'
-import type { MemberEntity } from '../entities/member.entity'
 
 const MEMBER_ID = '00000000-0000-0000-0000-0000000000bb'
 const CREDENTIAL_ID = '00000000-0000-0000-0000-0000000000cc'

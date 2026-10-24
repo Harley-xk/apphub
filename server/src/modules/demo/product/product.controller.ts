@@ -7,15 +7,15 @@
 import { Body, Controller, Delete, Get, Param, Post, Put, Query } from '@nestjs/common'
 import { ApiOperation, ApiTags } from '@nestjs/swagger'
 
+import { ProductCreateDto, ProductPageDto, ProductUpdateDto } from './dto/product.dto'
+import type { ProductVo } from './dto/product.dto'
+import { DemoProductService } from './product.service'
 import { OperateLog } from '../../../common/decorators/operate-log.decorator'
 import type { PageResult } from '../../../common/interfaces/page-result.interface'
 import { RequirePermissions } from '../../system/permissions'
 import { DEMO_PERMISSION_CODES } from '../permissions'
 // 注意：作为 @Query()/@Body() 元类型的 DTO 类必须值导入（import type 会在运行时擦除，
 // design:paramtypes 退化为 Object，ValidationPipe 的 whitelist 将拒绝全部字段）
-import { ProductCreateDto, ProductPageDto, ProductUpdateDto } from './dto/product.dto'
-import type { ProductVo } from './dto/product.dto'
-import { DemoProductService } from './product.service'
 
 @ApiTags('示例商品')
 @Controller('demo/product')

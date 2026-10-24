@@ -261,4 +261,64 @@ test.describe('应用中心', () => {
     await page.locator('.el-message-box').getByRole('button', { name: '确定' }).click()
     await expect(page.locator('.vxe-body--row').filter({ hasText: name })).toHaveCount(0)
   })
+
+  test('已发布版本：包可补传 / 替换 / 删除，替换弹窗锁定槽位并提示不影响存量客户端', async ({ page }) => {
+    // 页面级 mock 上下文：真后端无法在没有真实包记录的情况下发布，故整页以已发布版本数据驱动
+    const now = Date.now()
+    await page.route('**/api/appcenter/app/mock-app', async (route) => {
+      await route.fulfill({
+        json: okBody({
+          id: 'mock-app', appKey: 'ah_mockapp', name: '已发布应用', appType: ['desktop'], clientType: 'public',
+          framework: 'electron', iconUrl: null, description: null, status: 'enabled', sort: 0, createTime: now,
+        }),
+      })
+    })
+    await page.route('**/api/appcenter/app/mock-app/channel', async (route) => {
+      await route.fulfill({
+        json: okBody([{ id: 'mock-ch', appId: 'mock-app', code: 'stable', name: '稳定版', status: 'enabled', sort: 0, createTime: now }]),
+      })
+    })
+    await page.route('**/api/appcenter/app/mock-app/version**', async (route) => {
+      await route.fulfill({
+        json: okBody({
+          list: [{
+            id: 'mock-v1', appId: 'mock-app', channelId: 'mock-ch', channelCode: 'stable', channelName: '稳定版',
+            version: '1.0.1', title: '已发布版本', notes: null, forceUpdate: false,
+            status: 'published', publishedAt: now, createTime: now,
+          }],
+          total: 1,
+        }),
+      })
+    })
+    await page.route('**/api/appcenter/version/mock-v1/package', async (route) => {
+      await route.fulfill({
+        json: okBody([{
+          id: 'mock-pkg', versionId: 'mock-v1', platform: 'windows', arch: 'x64', fileName: 'app-setup-1.0.1.exe',
+          fileSize: 1048576, sha256: 'a'.repeat(64), sha512: 'c2hhNTEyLW1vY2s=', minisignSignature: null,
+          ossObjectKey: 'packages/ah_mockapp/stable/1.0.1/windows-x64/app-setup-1.0.1.exe',
+          blockmapObjectKey: null, blockmapSha512: null, blockmapFileSize: null, createTime: now,
+        }]),
+      })
+    })
+
+    await page.goto('/appcenter/version?appId=mock-app')
+    const versionRow = page.locator('.vxe-body--row').filter({ hasText: '1.0.1' }).first()
+    await expect(versionRow.locator('.el-tag--success')).toHaveText('已发布')
+
+    // 包抽屉：已发布版本仍显示上传入口，行内提供替换 / 删除
+    await clickRowAction(page, versionRow, '安装包')
+    const pkgDrawer = page.locator('.el-drawer').filter({ hasText: '安装包' })
+    await expect(pkgDrawer.getByRole('button', { name: '上传安装包' })).toBeVisible()
+    const pkgRow = pkgDrawer.locator('.vxe-body--row').filter({ hasText: 'app-setup-1.0.1.exe' }).first()
+    await expect(pkgRow.getByRole('button', { name: '替换' })).toBeVisible()
+    await expect(pkgRow.getByRole('button', { name: '删除' })).toBeVisible()
+
+    // 替换弹窗：锁定平台 / 架构 + 明示「不影响已安装客户端」
+    await clickRowAction(page, pkgRow, '替换')
+    const replaceDialog = pkgDrawer.locator('.el-dialog').filter({ hasText: '替换安装包' })
+    await expect(replaceDialog).toBeVisible()
+    await expect(replaceDialog.getByText(/替换只影响之后的新下载/)).toBeVisible()
+    await expect(replaceDialog.locator('.el-radio-button.is-disabled')).toHaveCount(5)
+    await expect(replaceDialog.locator('.el-radio-button.is-active')).toContainText('Windows')
+  })
 })

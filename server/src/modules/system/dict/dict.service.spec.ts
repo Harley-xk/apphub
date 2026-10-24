@@ -1,9 +1,9 @@
 import { describe, expect, it, jest } from '@jest/globals'
 
+import { DictService } from './dict.service'
 import { DictDataEntity } from '../entities/dict-data.entity'
 import { DictTypeEntity } from '../entities/dict-type.entity'
 import { SystemErrorCode } from '../error-codes'
-import { DictService } from './dict.service'
 
 type TypeRow = Partial<DictTypeEntity> & { type: string }
 type DataRow = Partial<DictDataEntity> & { dictType: string, dictValue: string }

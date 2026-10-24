@@ -58,4 +58,6 @@ export const AppcenterErrorCode = {
   PACKAGE_NOT_EXISTS: new ErrorCode(300400005, '包记录不存在'),
   /** 包记录无安装包对象（ios 仅登记元信息，无文件可下载） */
   PACKAGE_OBJECT_MISSING: new ErrorCode(300400006, '该包无安装包文件（ios 仅登记元信息），无法下载'),
+  /** 替换目标不存在（replaceExisting=true 但槽位空闲） */
+  PACKAGE_REPLACE_TARGET_NOT_EXISTS: new ErrorCode(300400007, '替换目标不存在：该平台 / 架构尚无包记录'),
 } as const

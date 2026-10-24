@@ -82,13 +82,20 @@
           {{ row.publishedAt ? dateTimeFormatter({ cellValue: row.publishedAt }) : '-' }}
         </template>
         <template #action="{ row }">
+          <el-button
+            v-if="row.status !== 'offline'"
+            v-hasPermi="'appcenter:version:update'"
+            link
+            type="primary"
+            @click="openUpdate(row)"
+          >
+            编辑
+          </el-button>
+          <!-- 安装包入口不随状态隐藏：下线版本包层冻结，但仍可查看与下载留档 -->
+          <el-button v-hasPermi="'appcenter:version:query'" link type="primary" @click="openPackageDrawer(row)">
+            安装包
+          </el-button>
           <template v-if="row.status !== 'offline'">
-            <el-button v-hasPermi="'appcenter:version:update'" link type="primary" @click="openUpdate(row)">
-              编辑
-            </el-button>
-            <el-button v-hasPermi="'appcenter:version:query'" link type="primary" @click="openPackageDrawer(row)">
-              安装包
-            </el-button>
             <el-button
               v-if="row.status === 'draft'"
               v-hasPermi="'appcenter:version:publish'"

@@ -82,7 +82,8 @@ export const TAURI_TARGET_MAP: Readonly<Record<string, { platform: string, arch:
 
 /**
  * 安装包 OSS 对象键规范（设计 §2.5）：
- * `packages/{appKey}/{channelCode}/{version}/{platform}[-{arch}]/{fileName}`——由后端生成下发（前端不自由拼键）
+ * `packages/{appKey}/{channelCode}/{version}/{platform}[-{arch}]/{fileName}`——由后端生成下发（前端不自由拼键）。
+ * batchId 仅替换已发布包时传入：插入随机批次段，避免同名文件重建覆盖旧对象（旧记录哈希与新对象不一致的窗口）
  */
 export function buildPackageObjectKey(input: {
   appKey: string
@@ -91,9 +92,11 @@ export function buildPackageObjectKey(input: {
   platform: string
   arch?: string | null
   fileName: string
+  batchId?: string
 }): string {
   const platformArch = input.arch ? `${input.platform}-${input.arch}` : input.platform
-  return `packages/${input.appKey}/${input.channelCode}/${input.version}/${platformArch}/${input.fileName}`
+  const dir = input.batchId ? `${platformArch}/${input.batchId}` : platformArch
+  return `packages/${input.appKey}/${input.channelCode}/${input.version}/${dir}/${input.fileName}`
 }
 
 /** blockmap 差分文件放包同目录：`{fileName}.blockmap` */

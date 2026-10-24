@@ -1,9 +1,9 @@
 import { describe, expect, it, jest } from '@jest/globals'
 
+import { AppService } from './app.service'
 import type { AppChannelEntity } from '../entities/app-channel.entity'
 import type { AppEntity } from '../entities/app.entity'
 import { AppcenterErrorCode } from '../error-codes'
-import { AppService } from './app.service'
 
 type AppRow = Partial<AppEntity> & { id: string }
 type ChannelRow = Partial<AppChannelEntity>

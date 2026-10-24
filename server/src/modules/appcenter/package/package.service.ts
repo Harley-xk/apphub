@@ -2,10 +2,12 @@
  * 作者: Harley-xk
  * 创建: 2026-10-16
  *
- * 描述: 包服务：STS 直传凭证签发（对象键后端生成）、登记（HeadObject 校验 / file_size 服务端为准）、删除（连带 OSS 清理）
+ * 描述: 包服务：STS 直传凭证签发（对象键后端生成）、登记（HeadObject 校验 / file_size 服务端为准）、删除（连带 OSS 清理）；
+ *       draft / published 均可维护，offline 冻结；published 支持替换（事务内软删旧包 + 清理旧对象）
  */
 import { Inject, Injectable, Logger } from '@nestjs/common'
 import { InjectRepository } from '@nestjs/typeorm'
+import { randomBytes } from 'node:crypto'
 import { IsNull } from 'typeorm'
 import type { FindOptionsWhere, Repository } from 'typeorm'
 
@@ -17,6 +19,7 @@ import {
   PACKAGE_PLATFORM,
   VERSION_STATUS,
 } from '../appcenter.constants'
+import { assertFrameworkArtifacts } from './package-artifacts.util'
 import { AppChannelEntity } from '../entities/app-channel.entity'
 import { AppPackageEntity } from '../entities/app-package.entity'
 import { AppVersionEntity } from '../entities/app-version.entity'
@@ -31,6 +34,11 @@ import type {
   PackageUploadTokenVo,
   PackageVo,
 } from './dto/package.dto'
+
+/** 替换批次短标识（8 位十六进制）：插入对象键，避免同名文件覆盖旧对象 */
+function generateBatchId(): string {
+  return randomBytes(4).toString('hex')
+}
 
 @Injectable()
 export class PackageService {
@@ -86,10 +94,14 @@ export class PackageService {
     }
   }
 
-  /** 签发直传凭证：draft 校验 + (platform, arch) 占用校验 + 对象键生成下发（A3 直传方案） */
+  /**
+   * 签发直传凭证：版本可维护校验（draft / published）+ 槽位状态校验 + 对象键生成下发（A3 直传方案）。
+   * 替换模式要求槽位已占用并生成带随机批次段的对象键（避免同名覆盖旧对象）；普通模式要求槽位空闲。
+   */
   async issueUploadToken(versionId: string, dto: PackageUploadTokenDto, userId: string): Promise<PackageUploadTokenVo> {
-    const { version, app, channel } = await this.loadDraftContext(versionId, userId)
-    await this.assertPlatformAvailable(versionId, dto.platform, dto.arch ?? null)
+    const { version, app, channel } = await this.loadMutableContext(versionId, userId)
+    const occupied = await this.findOccupiedPackage(versionId, dto.platform, dto.arch ?? null)
+    this.assertSlotState(occupied, dto.replaceExisting)
     // 对象键由后端生成下发（前端不自由拼键），blockmap 放包同目录
     const objectKey = buildPackageObjectKey({
       appKey: app.appKey,
@@ -98,15 +110,24 @@ export class PackageService {
       platform: dto.platform,
       arch: dto.arch ?? null,
       fileName: dto.fileName,
+      batchId: dto.replaceExisting ? generateBatchId() : undefined,
     })
     const blockmapObjectKey = `${objectKey}.blockmap`
     return this.storageService.issueUploadCredential({ objectKey, blockmapObjectKey })
   }
 
-  /** 登记包记录：HeadObject 校验对象存在，file_size 以服务端 content-length 为准落库 */
+  /**
+   * 登记包记录：HeadObject 校验对象存在，file_size 以服务端 content-length 为准落库。
+   * published 版本校验框架产物完整性（草稿由发布前置校验兜底）；替换在同一事务内软删旧包并插入新包，
+   * 提交后清理旧 OSS 对象（失败仅留痕）。
+   */
   async register(versionId: string, dto: PackageRegisterDto, userId: string): Promise<string> {
-    await this.loadDraftContext(versionId, userId)
-    await this.assertPlatformAvailable(versionId, dto.platform, dto.arch ?? null)
+    const { version, app } = await this.loadMutableContext(versionId, userId)
+    const occupied = await this.findOccupiedPackage(versionId, dto.platform, dto.arch ?? null)
+    this.assertSlotState(occupied, dto.replaceExisting)
+    // 发布后不允许补入不完整产物：electron 缺 sha512 / tauri 缺 minisign 会让适配端点整平台失联
+    if (version.status === VERSION_STATUS.PUBLISHED)
+      assertFrameworkArtifacts(app.framework, [dto])
 
     const objectKey = dto.objectKey?.trim() ?? ''
     if (!objectKey && dto.platform !== PACKAGE_PLATFORM.IOS) {
@@ -141,26 +162,41 @@ export class PackageService {
       blockmapFileSize = blockmapFileSize ?? blockmapHead.contentLength
     }
 
-    const pkg = await this.packageRepository.save(
-      this.packageRepository.create({
-        versionId,
-        platform: dto.platform,
-        arch: dto.arch ?? null,
-        fileName: dto.fileName,
-        fileSize,
-        sha256: dto.sha256,
-        sha512: dto.sha512 ?? null,
-        minisignSignature: dto.minisignSignature ?? null,
-        blockmapObjectKey,
-        blockmapSha512: dto.blockmapSha512 ?? null,
-        blockmapFileSize,
-        ossObjectKey: objectKey,
-      }),
-    )
+    const data = {
+      versionId,
+      platform: dto.platform,
+      arch: dto.arch ?? null,
+      fileName: dto.fileName,
+      fileSize,
+      sha256: dto.sha256,
+      sha512: dto.sha512 ?? null,
+      minisignSignature: dto.minisignSignature ?? null,
+      blockmapObjectKey,
+      blockmapSha512: dto.blockmapSha512 ?? null,
+      blockmapFileSize,
+      ossObjectKey: objectKey,
+    }
+
+    // 替换：软删旧包 + 插入新包在同一事务，避免「旧包已删、新包未落」的空档
+    if (occupied) {
+      const newId = await this.packageRepository.manager.transaction(async (manager) => {
+        const repo = manager.getRepository(AppPackageEntity)
+        await repo.softRemove(occupied)
+        const saved = await repo.save(repo.create(data))
+        return saved.id
+      })
+      await this.removeObjectsBestEffort(occupied)
+      return newId
+    }
+
+    const pkg = await this.packageRepository.save(this.packageRepository.create(data))
     return pkg.id
   }
 
-  /** 删除包：仅 draft 版本；软删记录并同步清理 OSS 对象（安装包 + blockmap） */
+  /**
+   * 删除包：draft / published 均可（offline 冻结）；软删记录并同步清理 OSS 对象（安装包 + blockmap）。
+   * published 下删除会撤回该平台分发（候选回退到更早版本或无更新），由管理端二次确认告知影响。
+   */
   async remove(versionId: string, pkgId: string, userId: string): Promise<void> {
     const pkg = await this.packageRepository.findOne({ where: { id: pkgId, versionId } })
     if (!pkg) {
@@ -170,50 +206,67 @@ export class PackageService {
     }
     const version = await this.getExistsVersion(versionId)
     await this.appService.assertAccessible(userId, version.appId)
-    if (version.status !== VERSION_STATUS.DRAFT) {
-      throw businessError('仅草稿版本的包允许删除', { code: AppcenterErrorCode.VERSION_STATUS_FORBIDDEN })
+    if (version.status === VERSION_STATUS.OFFLINE) {
+      throw businessError('已下线版本为终态，不允许删除平台包（重新分发请新建版本）', {
+        code: AppcenterErrorCode.VERSION_STATUS_FORBIDDEN,
+      })
     }
     await this.packageRepository.softRemove(pkg)
-    if (pkg.ossObjectKey) {
-      try {
-        await this.storageService.deleteObject(pkg.ossObjectKey)
-        if (pkg.blockmapObjectKey)
-          await this.storageService.deleteObject(pkg.blockmapObjectKey)
-      }
-      catch (error) {
-        // OSS 清理失败不阻断删除（记录保留对象键，人工跟进），留痕
-        this.logger.warn(
-          `删除包时清理 OSS 对象失败（对象键 ${pkg.ossObjectKey}）：${error instanceof Error ? error.message : String(error)}`,
-        )
-      }
-    }
+    await this.removeObjectsBestEffort(pkg)
   }
 
-  /** (platform, arch) 占用校验：查未删行（删包即释放槽位，draft 可删包重传兜底）；arch=null 须 IS NULL 匹配（PG 唯一索引对 NULL 不判等） */
-  private async assertPlatformAvailable(versionId: string, platform: string, arch: string | null): Promise<void> {
+  /** 查 (platform, arch) 占用行（未删）；arch=null 须 IS NULL 匹配（PG 唯一索引对 NULL 不判等） */
+  private async findOccupiedPackage(versionId: string, platform: string, arch: string | null): Promise<AppPackageEntity | null> {
     const where: FindOptionsWhere<AppPackageEntity> = {
       versionId,
       platform,
       arch: arch ?? IsNull(),
     }
-    const occupied = await this.packageRepository.findOne({ where })
-    if (occupied) {
+    return this.packageRepository.findOne({ where })
+  }
+
+  /** 槽位状态与替换意图一致性：替换须有占用行，新增须槽位空闲（防误覆盖与空替换） */
+  private assertSlotState(occupied: AppPackageEntity | null, replaceExisting?: boolean): void {
+    if (replaceExisting && !occupied) {
+      throw businessError(AppcenterErrorCode.PACKAGE_REPLACE_TARGET_NOT_EXISTS.message, {
+        code: AppcenterErrorCode.PACKAGE_REPLACE_TARGET_NOT_EXISTS,
+      })
+    }
+    if (!replaceExisting && occupied) {
       throw businessError(AppcenterErrorCode.PACKAGE_PLATFORM_DUPLICATE.message, {
         code: AppcenterErrorCode.PACKAGE_PLATFORM_DUPLICATE,
       })
     }
   }
 
-  /** 加载版本上下文并校验 draft 状态（上传 / 登记仅草稿可操作；先完成数据范围校验） */
-  private async loadDraftContext(versionId: string, userId: string): Promise<{
+  /** 清理包关联的 OSS 对象（失败不阻断主流程，留痕供人工跟进） */
+  private async removeObjectsBestEffort(pkg: AppPackageEntity): Promise<void> {
+    if (!pkg.ossObjectKey)
+      return
+    try {
+      await this.storageService.deleteObject(pkg.ossObjectKey)
+      if (pkg.blockmapObjectKey)
+        await this.storageService.deleteObject(pkg.blockmapObjectKey)
+    }
+    catch (error) {
+      this.logger.warn(
+        `清理 OSS 对象失败（对象键 ${pkg.ossObjectKey}）：${error instanceof Error ? error.message : String(error)}`,
+      )
+    }
+  }
+
+  /** 加载版本上下文并校验可维护状态（draft / published；offline 冻结；先完成数据范围校验） */
+  private async loadMutableContext(versionId: string, userId: string): Promise<{
     version: AppVersionEntity
     app: AppEntity
     channel: AppChannelEntity
   }> {
     const version = await this.getExistsVersion(versionId)
     await this.appService.assertAccessible(userId, version.appId)
-    if (version.status !== VERSION_STATUS.DRAFT) {
-      throw businessError('仅草稿版本允许上传与登记安装包', { code: AppcenterErrorCode.VERSION_STATUS_FORBIDDEN })
+    if (version.status === VERSION_STATUS.OFFLINE) {
+      throw businessError('已下线版本为终态，不允许维护平台包（重新分发请新建版本）', {
+        code: AppcenterErrorCode.VERSION_STATUS_FORBIDDEN,
+      })
     }
     const app = await this.appRepository.findOne({ where: { id: version.appId } })
     if (!app) {

@@ -7,12 +7,8 @@
 import { Body, Controller, Delete, Get, Param, Post, Put, Query } from '@nestjs/common'
 import { ApiOperation, ApiTags } from '@nestjs/swagger'
 
-import { OperateLog } from '../../../common/decorators/operate-log.decorator'
-import type { PageResult } from '../../../common/interfaces/page-result.interface'
-import { RequirePermissions, SYSTEM_PERMISSION_CODES } from '../permissions'
-// 注意：作为 @Query()/@Body() 元类型的 DTO 类必须值导入（import type 会在运行时擦除，
-// design:paramtypes 退化为 Object，ValidationPipe 的 whitelist 将拒绝全部字段）
 import { DictService } from './dict.service'
+import { RequirePermissions, SYSTEM_PERMISSION_CODES } from '../permissions'
 import {
   DictDataCreateDto,
   DictDataPageDto,
@@ -22,6 +18,10 @@ import {
   DictTypeUpdateDto,
 } from './dto/dict.dto'
 import type { DictDataVo, DictTypeSimpleVo, DictTypeVo } from './dto/dict.dto'
+import { OperateLog } from '../../../common/decorators/operate-log.decorator'
+import type { PageResult } from '../../../common/interfaces/page-result.interface'
+// 注意：作为 @Query()/@Body() 元类型的 DTO 类必须值导入（import type 会在运行时擦除，
+// design:paramtypes 退化为 Object，ValidationPipe 的 whitelist 将拒绝全部字段）
 
 @ApiTags('系统字典')
 @Controller('system/dict')

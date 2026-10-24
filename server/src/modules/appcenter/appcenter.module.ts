@@ -26,6 +26,8 @@ import { OpenUpdateService } from './open/open-update.service'
 import { PackageController } from './package/package.controller'
 import { PackageService } from './package/package.service'
 import { APPCENTER_MODULE_NAME, APPCENTER_PERMISSIONS } from './permissions'
+import { SkillController } from './skill/skill.controller'
+import { SkillDistributionService } from './skill/skill.service'
 import { OssStorageService } from './storage/oss-storage.service'
 import { STORAGE_SERVICE } from './storage/storage.service'
 import { UnconfiguredStorageService } from './storage/unconfigured-storage.service'
@@ -44,6 +46,7 @@ import { RateLimitPolicyRegistry } from '../../common/rate-limit/rate-limit-poli
     PackageController,
     OpenAppController,
     OpenUpdateController,
+    SkillController,
   ],
   providers: [
     AppService,
@@ -52,6 +55,7 @@ import { RateLimitPolicyRegistry } from '../../common/rate-limit/rate-limit-poli
     VersionService,
     PackageService,
     OpenUpdateService,
+    SkillDistributionService,
     {
       // OSS（region + bucket + 全局 aliyun AK）齐备装配真实实现，否则未配置 stub（服务正常启动）；
       // AK 与短信通道共用顶层 aliyun 段（整个应用唯一一组 AK）

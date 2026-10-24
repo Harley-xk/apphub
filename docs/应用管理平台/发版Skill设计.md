@@ -11,7 +11,7 @@ apphub-release skill 把发版能力下沉到应用开发侧：应用项目的 a
 
 **目标用户**：应用开发侧项目的 AI agent（Claude Code 等）；**不面向**平台运营人员（运营继续用管理后台）。
 
-## 2. 设计主张（K1~K7，已经用户评审）
+## 2. 设计主张（K1~K9，已经用户评审）
 
 | 编号 | 主张 | 取舍理由 |
 | --- | --- | --- |
@@ -22,6 +22,8 @@ apphub-release skill 把发版能力下沉到应用开发侧：应用项目的 a
 | K5 | 内置 **electron-builder / tauri build** 双框架的打包指导与产物定位（含 .sig / blockmap / latest.yml 收集），其余项目走配置自定义 `buildCommand` | 平台目标客群以 electron / tauri 桌面应用为主；框架产物（sha512 / minisign 签名）只能构建时生成（主张 A5），skill 负责收集登记 |
 | K6 | 配置文件 `.apphub-release.json` 只存非敏感项；凭据走**环境变量优先 + 配置 `credentials` 节兜底**双通道 | 配置文件可入库共享，凭据不误提交（SKILL.md 指导生成时写入 .gitignore） |
 | K7 | 文档组织：本文（设计）+ SKILL.md（即使用说明）+ 接入手册 README 索引挂链接 | 遵循「文档先行」；不为 skill 再写独立使用手册，避免与 SKILL.md 双份维护 |
+| K8 | **技能自主更新**：构建时把 skill 按版本目录 + `manifest.json`（每文件 sha256）写入 `server/dist/skill/apphub-release/`，由后端公开接口分发；CLI 提供 `self-update`（检查 / 下载 / 校验 / 原子替换 / 失败回滚），SKILL.md 在发版前触发检查 | 项目级 skill 无内置远端同步能力；复用既有 `/api` 反代，**部署无需改 nginx 配置**；产物随 server 发布包同源；逐文件分发免 zip 依赖 |
+| K9 | **冷启动入口**：同一公开接口提供 `install.mjs`（安装 / 更新器）与安装说明（给 agent 的操作指引），按 manifest 下载并 sha256 校验后写入目标目录；不依赖本地已安装技能 | 自更新无法覆盖「未安装 / 旧版无 self-update」场景；用户只需一个接口地址交给 agent，零鉴权、零第三方依赖 |
 
 ## 3. 总体架构
 
@@ -51,11 +53,51 @@ flowchart LR
 ```text
 skills/apphub-release/
 ├── SKILL.md              # agent 指令（skill 的使用说明本体）
+├── VERSION               # skill 版本（semver，随 skill 变更递增）
 └── scripts/
     └── apphub.mjs        # 零依赖 Node CLI（命令集见 §6）
 ```
 
 安装方式：将 `apphub-release` 整个目录拷贝至应用项目 `.claude/skills/apphub-release/`（项目级）或 `~/.claude/skills/apphub-release/`（用户级）。skill 不入 apphub 的 pnpm workspace、不被 lefthook lint 辖管（glob 仅覆盖 server/ web/），随仓库纯文件交付。
+
+**版本策略**：`VERSION` 是 skill 自身版本，独立于平台版本；**每次改动 `SKILL.md` / `scripts/` 必须递增**——客户端按 semver 判定，版本不变时不会触发自更新（manifest 的 sha256 变化不足以驱动更新）。
+
+**自更新分发（K8）**：构建时 `scripts/build-skill-manifest.mjs` 把 skill 复制到 `server/dist/skill/apphub-release/{version}/`（白名单：`SKILL.md` / `VERSION` / `scripts/**`），并生成同目录 `manifest.json`。产物随发布包 `server/` 目录部署，由后端公开接口读取——**复用既有 `/api` 反代，部署无需新增 nginx 配置**。
+
+```jsonc
+{
+  "name": "apphub-release",
+  "version": "1.4.0",
+  "generatedAt": "2026-10-24T08:00:00.000Z",
+  "files": [
+    {
+      "path": "SKILL.md",
+      "url": "/api/skill/apphub-release/files/1.4.0/SKILL.md",
+      "sha256": "…",
+      "size": 12345
+    },
+    { "path": "VERSION", "url": "/api/skill/apphub-release/files/1.4.0/VERSION", "sha256": "…", "size": 6 },
+    { "path": "scripts/apphub.mjs", "url": "/api/skill/apphub-release/files/1.4.0/scripts/apphub.mjs", "sha256": "…", "size": 34567 }
+  ],
+  "installer": { "path": "install.mjs", "url": "/api/skill/apphub-release/install.mjs", "sha256": "…", "size": 8678 },
+  "installDoc": { "path": "INSTALL.md", "url": "/api/skill/apphub-release", "sha256": "…", "size": 2456 }
+}
+```
+
+客户端按 manifest 的 `url` 拼接 `baseUrl` 逐文件下载。
+
+**公开分发接口（K8 / K9，免 JWT、免签名）**：
+
+| 接口 | 用途 |
+| --- | --- |
+| `GET /api/skill/apphub-release` | 冷启动安装说明（Markdown）；**用户只需要把这一个地址交给 agent** |
+| `GET /api/skill/apphub-release/manifest` | 版本检查：`version` + `files[].sha256` + `installer` / `installDoc` 元信息 |
+| `GET /api/skill/apphub-release/install.mjs` | 安装 / 更新器：`--check` 检查；默认按 manifest 下载、校验并写入目标目录（`--target`，缺省项目级 `.claude/skills/apphub-release`） |
+| `GET /api/skill/apphub-release/files/{version}/{path}` | 版本化技能文件；版本与路径均按 manifest 白名单校验 |
+
+- **说明源文件**：`docs/接入手册/技能安装与更新.md`，构建时复制为分发目录下的 `INSTALL.md`；**不放在技能包内**（未安装技能的用户也应能获取）
+- **缓存**：manifest / 说明 / 安装器 `no-cache`；版本化文件 `immutable` 长缓存（URL 含版本）
+- **路径安全**：接口只允许读取分发目录内、且出现在当前 manifest `files` 清单中的文件，阻断路径穿越与任意文件读取
 
 ## 5. 配置契约
 
@@ -95,6 +137,7 @@ skills/apphub-release/
 
 | 子命令 | 关键参数 | 作用 |
 | --- | --- | --- |
+| `self-update` | `[--check]` `[--yes]` `[--base-url]` | 技能自检 / 更新：读本地 `VERSION` 与远端 manifest 比对；`--check` 只提示（更新源不可达不阻断）；更新时逐文件下载 → sha256 校验 → 原子替换，失败回滚。不加载配置、不登录（`--base-url` 缺省读配置，再回落线上基址） |
 | `status` | — | 连通自检：登录 → 应用信息（appKey / framework / 状态）→ 通道清单 → 各通道最新版本。首次接入与排障第一步 |
 | `create-version` | `--version` `--title` `[--notes]` `[--force]` `[--channel]` | 建草稿版本；**幂等**：同通道同版本已有 draft 直接复用并提示，已 published / offline 则报错 |
 | `upload` | `--version` `--platform` `[--arch]` `--file` `[--blockmap]` `[--sig-file]` `[--replace]` | 单包上传全链：流式算 sha256（hex）/ sha512（base64）→ 读 minisign 签名 → 签发 STS → PutObject 安装包（及 blockmap）→ 登记包记录。**draft / published 均可**（offline 冻结）：槽位空闲即补包；`--replace` 替换已占用槽位（已发布版本换包用，服务端事务内软删旧包） |
@@ -200,6 +243,7 @@ sequenceDiagram
 5. **多包版本**：一次发版 N 平台包逐个 upload；中断可续（draft 状态可反复增删包），完成后再 publish
 6. **发布后平台包维护**：published 下可补新平台包（槽位空闲）、`--replace` 换包、`remove-package` 撤回某平台分发；offline 版本一律拒绝（重新分发须新建版本）。**替换 / 删除不推动已安装客户端**（版本号未变，客户端按 semver 判断无更新），要修复存量用户必须发新版本——skill 须在动作前后明确告知
 7. **并发发版**：同账号多处并发操作同一 draft 由服务端唯一约束与状态机兜底（槽位冲突 003004002 / 状态机 003003004），skill 不做本地锁
+8. **自更新的生效时机**：`scripts/` 下的 CLI 每次执行读磁盘最新内容，更新后即时生效；`SKILL.md` 在已调用过的会话中已固化，不追溯更新，下次调用或新开会话生效。平台尚未发布 skill 产物时 `--check` 只告警，发版继续使用本地版本
 
 ## 13. 验收标准
 
@@ -208,3 +252,5 @@ sequenceDiagram
 3. 错误路径抽验：未配签名密钥调写接口 401、重复版本号、槽位重复——错误码与 §11 处置一致
 4. `pnpm check` 全绿（skill 目录不参与 lint / workspace，需验证不破坏现有门禁）
 5. 接入手册 README 选册导航与 docs/README.md 索引挂接本设计文档
+6. **自更新验证**：本地分发接口下 `self-update --check` 正确比对版本 → `self-update` 后 `VERSION` 与文件内容为新版；篡改文件使 sha256 不匹配时更新失败并回滚到旧版本；`--check` 在更新源不可达时告警但不阻断
+7. **冷启动验证**：目标目录不存在时 `install.mjs` 完成安装；旧版本目录可升级；`--check` 正确输出未安装 / 有更新 / 已最新；sha256 不匹配时中止且不写入目标目录

@@ -22,6 +22,9 @@ pnpm --filter web run build
 echo "== 3/5 构建后端 =="
 pnpm --filter server run build
 
+echo "== 生成发版 skill 分发产物（server/dist/skill，经公开接口提供，不依赖 nginx 静态配置）=="
+node scripts/build-skill-manifest.mjs --source skills/apphub-release --output server/dist/skill/apphub-release
+
 echo "== 4/5 提取 server 生产依赖（pnpm deploy 自包含产物，不影响本地依赖）=="
 STAGE=release/staging
 rm -rf release "$STAGE" && mkdir -p "$STAGE"

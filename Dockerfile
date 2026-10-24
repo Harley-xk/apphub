@@ -25,6 +25,9 @@ RUN VITE_SIGN_SECRET="${VITE_SIGN_SECRET:-prod-sign-secret-change-me}" pnpm --fi
 # 后端构建（nest build → dist）
 RUN pnpm --filter server run build
 
+# 发版 skill 分发产物（进 server/dist，经公开接口提供，供应用侧安装 / self-update）
+RUN node scripts/build-skill-manifest.mjs --source skills/apphub-release --output server/dist/skill/apphub-release
+
 # ---------- 生产依赖阶段：仅安装 server 生产依赖 ----------
 FROM node:22-alpine AS prod-deps
 WORKDIR /app

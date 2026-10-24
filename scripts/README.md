@@ -12,5 +12,7 @@
 
 - `wait-for-server.mjs`：轮询后端端口直至就绪后退出，供 VS Code 组合调试的 preLaunchTask（任务 `wait:server`）使用，属调试工作流内部部件，不挂载为 npm 命令
 - `verify-commit-msg.mjs`：校验提交信息格式「【动作】模块 - 内容概述」（见 `rules/base.md`），由 lefthook 的 commit-msg 钩子调用（见 `lefthook.yml`），属提交门禁内部部件，不挂载为 npm 命令
+- `build-skill-manifest.mjs`：把 `skills/apphub-release/` 复制为版本化目录并生成 `manifest.json`（每文件 sha256 + 公开接口 URL），由 `build-release.sh` 与 Dockerfile 调用，产物落 `server/dist/skill/apphub-release/` 经后端公开接口分发；属构建流水线内部部件，不挂载为 npm 命令
+- `install-skill.mjs`：发版技能冷启动安装 / 更新器，作为构建产物分发到 `/api/skill/apphub-release/install.mjs`，供未安装或旧版无自更新能力时使用
 
 其余日常命令（开发、构建、测试）均已在根目录 `package.json` 中提供，见根 [README.md](../README.md)。

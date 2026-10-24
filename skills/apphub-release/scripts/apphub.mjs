@@ -3,15 +3,16 @@
  * 作者: Harley-xk
  * 创建: 2026-10-19
  *
- * 描述: apphub 发版 CLI：登录管理端 / 版本创建与维护 / STS 直传 OSS 上传登记 / 发布与更新检测验证（零第三方依赖，Node ≥ 18）
+ * 描述: apphub 发版 CLI：登录管理端 / 版本创建与维护 / STS 直传 OSS 上传登记 / 发布与更新检测验证 / 技能自更新（零第三方依赖，Node ≥ 18）
  * 设计依据: docs/应用管理平台/发版Skill设计.md（K1~K7）
  */
 import { createHash, createHmac, randomBytes } from 'node:crypto'
-import { createReadStream } from 'node:fs'
+import { createReadStream, realpathSync } from 'node:fs'
 import fs from 'node:fs/promises'
+import http from 'node:http'
 import https from 'node:https'
 import path from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { parseArgs } from 'node:util'
 
 /* ---------------------------------- 出错与输出 ---------------------------------- */
@@ -71,6 +72,186 @@ function resolveCredentials(config) {
   if (!username || !password)
     fail('缺少发版账号凭据：请设置环境变量 APPHUB_USERNAME / APPHUB_PASSWORD，或在配置文件 credentials 节填写（该文件须加入 .gitignore）')
   return { username, password, signSecret }
+}
+
+/* ---------------------------------- 技能自更新 ---------------------------------- */
+
+const DEFAULT_BASE_URL = 'https://appcenter.witice.top'
+const SKILL_NAME = 'apphub-release'
+/** skill 根目录：脚本固定位于 <skill>/scripts/apphub.mjs */
+const SKILL_ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+
+async function readLocalSkillVersion() {
+  try {
+    return (await fs.readFile(path.join(SKILL_ROOT_DIR, 'VERSION'), 'utf8')).trim() || null
+  }
+  catch {
+    return null
+  }
+}
+
+/** 基址优先级：--base-url > 配置 baseUrl > 线上默认（首次接入前无配置也能自检；私有化部署须显式指定） */
+async function resolveSkillBaseUrl(explicit, configPath) {
+  if (explicit)
+    return explicit.replace(/\/+$/, '')
+  try {
+    const raw = await fs.readFile(configPath ?? DEFAULT_CONFIG_FILE, 'utf8')
+    const baseUrl = JSON.parse(raw).baseUrl
+    if (baseUrl)
+      return String(baseUrl).replace(/\/+$/, '')
+  }
+  catch {}
+  return DEFAULT_BASE_URL
+}
+
+/** 通用下载（支持 http/https 与最多 3 次重定向，30s 超时） */
+function fetchBuffer(url, redirects = 3) {
+  return new Promise((resolve, reject) => {
+    const client = url.startsWith('https:') ? https : http
+    const request = client.get(url, { headers: { 'User-Agent': `${SKILL_NAME}-skill` } }, (response) => {
+      const status = response.statusCode ?? 0
+      if (status >= 300 && status < 400 && response.headers.location && redirects > 0) {
+        response.resume()
+        resolve(fetchBuffer(new URL(response.headers.location, url).href, redirects - 1))
+        return
+      }
+      if (status !== 200) {
+        response.resume()
+        reject(new CliError(`下载失败 HTTP ${status}：${url}`))
+        return
+      }
+      const chunks = []
+      response.on('data', chunk => chunks.push(chunk))
+      response.on('end', () => resolve(Buffer.concat(chunks)))
+      response.on('error', reject)
+    })
+    request.on('error', reject)
+    request.setTimeout(30_000, () => request.destroy(new Error('下载超时（30s）')))
+  })
+}
+
+/** 分发文件路径白名单：只允许 skill 根下 SKILL.md / VERSION / scripts/**，拒绝越权与路径穿越 */
+function assertSkillPath(rel) {
+  if (typeof rel !== 'string' || !rel || rel.includes('\\') || path.isAbsolute(rel))
+    throw new CliError(`manifest 文件路径非法：${String(rel)}`)
+  const normalized = path.posix.normalize(rel)
+  if (normalized !== rel || normalized.startsWith('..'))
+    throw new CliError(`manifest 文件路径非法：${rel}`)
+  if (!(normalized === 'SKILL.md' || normalized === 'VERSION' || normalized.startsWith('scripts/')))
+    throw new CliError(`manifest 含不允许分发的文件：${rel}`)
+}
+
+/**
+ * 自检 / 更新 skill 本体（设计见 docs/应用管理平台/发版Skill设计.md K8）。
+ * - --check：只比对版本，不动文件；更新源不可达时仅告警，不阻断发版
+ * - 默认：下载 manifest 列出的文件 → sha256 校验 → 逐个原子替换 → 失败回滚
+ * 不依赖配置文件与登录：未接入应用也能先更新技能
+ */
+async function cmdSelfUpdate(args) {
+  const checkOnly = Boolean(args.values.check)
+  const current = await readLocalSkillVersion()
+  const baseUrl = await resolveSkillBaseUrl(args.values['base-url'], args.values.config)
+  const manifestUrl = `${baseUrl}/api/skill/${SKILL_NAME}/manifest`
+
+  let manifest
+  try {
+    manifest = JSON.parse((await fetchBuffer(manifestUrl)).toString('utf8'))
+  }
+  catch (error) {
+    const message = `无法获取技能更新源（${manifestUrl}）：${error instanceof Error ? error.message : String(error)}`
+    if (checkOnly) {
+      console.log(`⚠ ${message}`)
+      console.log(`  继续使用本地版本 ${current ?? '未知'}（自检失败不阻断发版）`)
+      return
+    }
+    fail(message)
+  }
+  if (manifest?.name !== SKILL_NAME || typeof manifest.version !== 'string' || !Array.isArray(manifest.files))
+    fail('更新源 manifest 格式非法（缺少 name / version / files）')
+
+  if (!current) {
+    console.log(`⚠ 本地缺少 VERSION 文件，按需要更新处理（远端 ${manifest.version}）`)
+  }
+  else if (compareSemver(current, manifest.version) >= 0) {
+    ok(`技能已是最新：${current}`)
+    return
+  }
+  else {
+    ok(`发现技能新版本：${current} → ${manifest.version}`)
+  }
+
+  if (checkOnly) {
+    console.log('  执行 `node scripts/apphub.mjs self-update` 更新（CLI 即时生效；SKILL.md 下次调用 / 新会话生效）')
+    return
+  }
+
+  // 先全部下载并校验，再逐个替换；任一失败回滚已替换文件
+  const staging = path.join(SKILL_ROOT_DIR, `.update-${process.pid}`)
+  try {
+    await fs.rm(staging, { recursive: true, force: true })
+    await fs.mkdir(staging, { recursive: true })
+
+    for (const file of manifest.files) {
+      assertSkillPath(file.path)
+      if (typeof file.sha256 !== 'string' || file.sha256.length !== 64)
+        throw new CliError(`manifest 文件缺少合法 sha256：${file.path}`)
+      const fileUrl = typeof file.url === 'string'
+        ? `${baseUrl}${file.url}`
+        : `${baseUrl}/api/skill/${SKILL_NAME}/files/${manifest.version}/${file.path}`
+      const content = await fetchBuffer(fileUrl)
+      const digest = createHash('sha256').update(content).digest('hex')
+      if (digest !== file.sha256)
+        throw new CliError(`文件校验失败（sha256 不匹配）：${file.path}`)
+      const dest = path.join(staging, file.path)
+      await fs.mkdir(path.dirname(dest), { recursive: true })
+      await fs.writeFile(dest, content)
+    }
+
+    const applied = []
+    try {
+      for (const file of manifest.files) {
+        const target = path.join(SKILL_ROOT_DIR, file.path)
+        const source = path.join(staging, file.path)
+        const backup = path.join(staging, `${file.path}.old`)
+        await fs.mkdir(path.dirname(target), { recursive: true })
+        await fs.mkdir(path.dirname(backup), { recursive: true })
+        let hadOld = false
+        try {
+          await fs.rename(target, backup)
+          hadOld = true
+        }
+        catch {}
+        try {
+          await fs.rename(source, target)
+        }
+        catch (error) {
+          if (hadOld)
+            await fs.rename(backup, target).catch(() => {})
+          throw error
+        }
+        applied.push({ target, backup: hadOld ? backup : null })
+      }
+    }
+    catch (error) {
+      for (const item of applied.reverse()) {
+        await fs.rm(item.target, { force: true }).catch(() => {})
+        if (item.backup)
+          await fs.rename(item.backup, item.target).catch(() => {})
+      }
+      throw error
+    }
+
+    const skillChanged = manifest.files.some(file => file.path === 'SKILL.md')
+    ok(`技能已更新：${current ?? '未知'} → ${manifest.version}`)
+    console.log(skillChanged
+      ? '  CLI 已即时生效；SKILL.md 已更新，下次调用 / 新会话生效'
+      : '  CLI 已即时生效')
+  }
+  catch (error) {
+    await fs.rm(staging, { recursive: true, force: true }).catch(() => {})
+    fail(`技能更新失败，已回滚：${error instanceof Error ? error.message : String(error)}`)
+  }
+  await fs.rm(staging, { recursive: true, force: true }).catch(() => {})
 }
 
 /* ---------------------------------- API 客户端 ---------------------------------- */
@@ -523,6 +704,17 @@ const STRING = { type: 'string' }
 const BOOLEAN = { type: 'boolean' }
 
 const COMMANDS = {
+  'self-update': {
+    brief: '自检 / 更新 skill 本体（平台公开接口分发，无需登录）',
+    options: {
+      check: { ...BOOLEAN, help: '仅检查是否有新版本（更新源不可达时不阻断）' },
+      yes: { ...BOOLEAN, help: '执行更新（CI 显式语义；默认可执行）' },
+      'base-url': { ...STRING, help: '平台基址（缺省读配置，再缺省线上基址）' },
+    },
+    async run() {
+      // main 对 self-update 单独短路（不加载配置 / 不登录），此分支不会被调用
+    },
+  },
   status: {
     brief: '连通自检：登录并展示应用 / 通道 / 各通道最新版本',
     options: {},
@@ -690,6 +882,12 @@ async function main() {
     fail(`参数解析失败：${error.message}`)
   }
 
+  // 自更新不依赖配置与登录（首次接入前即可用），在加载配置前短路
+  if (name === 'self-update') {
+    await cmdSelfUpdate(args)
+    return
+  }
+
   const config = await loadConfig(args.values.config)
   // verify 走开放 API 免登录免凭据；其余命令须先具备发版账号凭据并登录
   const credentials = name === 'verify' ? {} : resolveCredentials(config)
@@ -701,8 +899,20 @@ async function main() {
   await command.run(client, config, args)
 }
 
+/** 直接执行判定：realpath 归一，覆盖 /tmp 等符号链接目录（否则 CLI 会被静默跳过） */
+function isDirectExecution() {
+  if (!process.argv[1])
+    return false
+  try {
+    return import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href
+  }
+  catch {
+    return false
+  }
+}
+
 // 直接执行时进入 CLI；被 import 时不自动运行（冒烟 / 定制脚本复用客户端核心）
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (isDirectExecution()) {
   main().catch((error) => {
     fail(error instanceof CliError ? `${error.message}${error.code ? `（code ${error.code}）` : ''}` : error.stack ?? String(error))
   })

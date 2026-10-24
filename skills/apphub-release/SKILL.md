@@ -1,6 +1,6 @@
 ---
 name: apphub-release
-description: 应用发版助手：向 apphub 应用管理平台发布新版本——自动打包、上传安装包（STS 直传 OSS）、创建/发布/验证版本、维护版本信息（更新说明、强制标记、下线），以及已发布版本补包 / 换包 / 撤回平台包。当用户要求发版、发布新版本、上传安装包、补传平台包、替换已发布包、更新版本信息、下线版本，或首次接入 apphub 平台发版时使用。
+description: 应用发版助手：向 apphub 应用管理平台发布新版本——自动打包、上传安装包（STS 直传 OSS）、创建/发布/验证版本、维护版本信息（更新说明、强制标记、下线），以及已发布版本补包 / 换包 / 撤回平台包；支持从平台自检并更新技能本体。当用户要求发版、发布新版本、上传安装包、补传平台包、替换已发布包、更新版本信息、下线版本、检查/更新发版技能，或首次接入 apphub 平台发版时使用。
 ---
 
 # apphub 发版助手
@@ -37,8 +37,9 @@ description: 应用发版助手：向 apphub 应用管理平台发布新版本�
 
 ## 1. 标准发版流程
 
-按序执行，任一步失败按 §4 处置后重试：
+按序执行，任一步失败按 §5 处置后重试：
 
+0. **技能自检（建议每次执行）**：`node scripts/apphub.mjs self-update --check`。有新版本按 §4 更新后再继续；自检失败仅告警，不阻断发版。
 1. **读版本号**：electron / 自定义项目读 `package.json` 的 `version`；tauri 项目读 `src-tauri/tauri.conf.json` 的 `version`。格式必须 semver（`MAJOR.MINOR.PATCH`，可选 `-beta.1` 类后缀），不符先让用户修。
 2. **定更新说明**：用户已给出则用之；未给出时用 `git log <上一版本 tag>..HEAD --oneline`（无 tag 则最近 10 条）生成草稿，**呈给用户确认或修改**后使用。版本标题默认 `v{version}`。
 3. **构建**：构建命令优先级 = 用户本次指定 > 项目脚本（`package.json` scripts，如 `build:win` / `tauri`）> 框架惯例（§2）> 配置 `buildCommand`。构建失败如实报告，不带病继续。
@@ -52,7 +53,7 @@ description: 应用发版助手：向 apphub 应用管理平台发布新版本�
 7. **确认门（红线）**：发布即客户端可见。向用户呈现发布摘要——版本号 / 通道 / 各平台包与大小 / 更新说明 / 强制标记——明确同意后执行
    `node scripts/apphub.mjs publish --version {版本}`。
    **例外**：用户已明示「全自动 / 不要确认 / CI 模式」时跳过此门。
-8. **验证**：`node scripts/apphub.mjs verify --expect {版本} --platform {平台} [--arch {架构}] [--current {任一旧版本}]`，通过即闭环；失败按 §4 排查。
+8. **验证**：`node scripts/apphub.mjs verify --expect {版本} --platform {平台} [--arch {架构}] [--current {任一旧版本}]`，通过即闭环；失败按 §5 排查。
 9. **汇报**：发布完成后汇总版本 / 通道 / 包清单 / 验证结果 / 下载链路提示（客户端经更新检测自动获取）。
 
 ## 2. 框架适配——产物定位
@@ -97,7 +98,20 @@ description: 应用发版助手：向 apphub 应用管理平台发布新版本�
 - **撤回已发布平台包**：`remove-package --version {版本} --platform {平台} [--arch {架构}]`——该平台回退到更早的有包版本，若无则新用户拿不到该版本；**执行前须用户确认**
 - **草稿期换包**：同样用 `upload --replace`，或 `remove-package` 后重新 `upload`（二选一，推荐 `--replace` 避免空档）
 
-## 4. 错误处置
+## 4. 技能自更新
+
+skill 本体（`SKILL.md` + `scripts/`）由平台随发布包部署，经公开接口 `{baseUrl}/api/skill/apphub-release` 通过 manifest + 逐文件 sha256 分发，不依赖插件市场、第三方源或额外 nginx 配置。
+
+- **检查**：`node scripts/apphub.mjs self-update --check`——读本地 `VERSION` 与远端 manifest 比对，只提示不改文件；更新源不可达时仅告警（不阻断发版）
+- **更新**：`node scripts/apphub.mjs self-update`——下载 → sha256 校验 → 逐个原子替换，失败自动回滚；只维护 `SKILL.md` / `VERSION` / `scripts/`，不触碰应用项目根目录的 `.apphub-release.json`
+- **确认门**：检测到新版本时，先向用户说明「当前版本 → 新版本」，获同意后执行更新（用户明示全自动 / CI 模式时可跳过）
+- **生效时机（诚实边界）**：`scripts/` 下的 CLI **即时生效**；`SKILL.md` 的变更对**已加载的当前会话**不追溯，下次调用技能或新开会话时生效
+- **私有化部署**：`--base-url https://your-apphub.example.com`（或配置文件的 `baseUrl`）；未传时依次读配置文件、回落线上基址
+- **CI**：`node scripts/apphub.mjs self-update --yes` 作为发版前置步骤
+- **自动检查（可选）**：应用工程可在 `.claude/settings.json` 配 SessionStart hook 执行 `--check`，实现每次会话自动发现更新
+- **冷启动（未安装 / 旧版无 self-update）**：只需把 `{baseUrl}/api/skill/apphub-release` 交给用户或 agent，接口直接返回安装说明，按说明用 `install.mjs` 完成安装或更新——不需要平台账号，也不依赖本地已有脚本
+
+## 5. 错误处置
 
 | 现象 / 错误码 | 含义 | 你的动作 |
 | --- | --- | --- |
@@ -114,11 +128,15 @@ description: 应用发版助手：向 apphub 应用管理平台发布新版本�
 | `300400007` | 替换目标不存在 | `--replace` 指向的槽位本无包：去掉 `--replace` 按新增补包重试 |
 | OSS `AccessDenied` | 直传被拒 | 凭证过期（重试会重新签发）或对象键不符；持续失败联系平台方 |
 | verify 失败 hasUpdate=false | 发布未生效 / 应用或通道停用 | 核对版本状态与通道状态后重验 |
+| self-update 更新源不可达 | manifest 拉取失败 / 404 | 核对 `baseUrl` 与平台是否已发布 skill 产物；`--check` 仅告警，发版可继续用本地版本 |
+| self-update sha256 不匹配 | 下载损坏或源被替换 | 重试一次；持续失败停止更新并报告，勿手工覆盖文件 |
+| self-update 无写权限 | skill 目录只读 | 请用户调整权限，或改用 `--check` 仅检测 |
 
-## 5. 红线
+## 6. 红线
 
 1. **publish、offline、撤回已发布平台包前必须获用户确认**（发布即客户端可见、下线即终态、撤包即改变该平台分发）；仅当用户明示全自动时跳过
 2. **凭据不回显、不入库**：日志与汇报中不得出现密码 / 签名密钥；含 credentials 的配置文件必须已在 `.gitignore`
 3. **包维护作用于 draft / published，offline 冻结**：offline 报 `300300004` 即停止，重新分发须新建版本，勿绕行
 4. **替换 / 撤包不推动已安装客户端**：版本号未变时客户端按 semver 判断无更新；不得把「换包」当作修复存量用户的手段而不告知，修复存量必须发新版本
 5. **产物哈希对照不一致即停止**：宁可中断发版，不登记错位产物
+6. **自更新只信平台基址**：只从配置的 `baseUrl`（或线上默认基址）拉取 manifest 与文件，不接受第三方 URL、不手工拼装或覆盖 skill 文件；sha256 不匹配即停止

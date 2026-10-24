@@ -55,6 +55,10 @@ export default () => ({
     // 窗口长度（毫秒），默认 1 分钟
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS ?? String(60 * 1000), 10),
   },
+  skill: {
+    // 发版 skill 分发产物目录（构建时生成到 server/dist/skill/apphub-release；缺省按 dist 结构定位）
+    distDir: process.env.SKILL_DIST_DIR ?? '',
+  },
   aliyun: {
     // 全局阿里云 AccessKey（整个应用唯一一组 AK）：OSS 与短信通道共用同一 RAM 子账号，
     // 子账号需同时授予 OSS 相关与短信发送（sms:SendSms）权限

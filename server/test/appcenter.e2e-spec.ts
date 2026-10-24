@@ -2,7 +2,10 @@ import { afterAll, beforeAll, describe, expect, it } from '@jest/globals'
 import { INestApplication, ValidationPipe } from '@nestjs/common'
 import { Test } from '@nestjs/testing'
 import { getDataSourceToken, getRepositoryToken } from '@nestjs/typeorm'
+import fs from 'node:fs'
 import type { Server } from 'node:http'
+import os from 'node:os'
+import path from 'node:path'
 import request from 'supertest'
 
 import { AppModule } from '../src/app.module'
@@ -27,6 +30,29 @@ import { UserEntity } from '../src/modules/system/entities/user.entity'
 // 环境变量须在 TestingModule 构建前设置（Jest 按测试文件分进程运行，与其他套件互不影响）
 process.env.SIGNATURE_ENABLED = 'false'
 process.env.JWT_SECRET = 'e2e-jwt-secret'
+
+// 技能分发接口 fixture：构建产物在测试环境不生成，用临时目录模拟 server/dist/skill/apphub-release
+const SKILL_VERSION = '1.4.0'
+const skillDistDir = fs.mkdtempSync(path.join(os.tmpdir(), 'apphub-skill-e2e-'))
+process.env.SKILL_DIST_DIR = skillDistDir
+fs.mkdirSync(path.join(skillDistDir, SKILL_VERSION, 'scripts'), { recursive: true })
+fs.writeFileSync(path.join(skillDistDir, 'INSTALL.md'), '# 安装说明')
+fs.writeFileSync(path.join(skillDistDir, 'install.mjs'), 'console.log(1)')
+fs.writeFileSync(path.join(skillDistDir, SKILL_VERSION, 'SKILL.md'), '# 技能指令')
+fs.writeFileSync(path.join(skillDistDir, SKILL_VERSION, 'VERSION'), SKILL_VERSION)
+fs.writeFileSync(path.join(skillDistDir, SKILL_VERSION, 'scripts', 'apphub.mjs'), 'console.log(2)')
+fs.writeFileSync(path.join(skillDistDir, 'manifest.json'), JSON.stringify({
+  name: 'apphub-release',
+  version: SKILL_VERSION,
+  generatedAt: '2026-10-24T08:00:00.000Z',
+  files: [
+    { path: 'SKILL.md', url: `/api/skill/apphub-release/files/${SKILL_VERSION}/SKILL.md`, sha256: 'a'.repeat(64), size: 7 },
+    { path: 'VERSION', url: `/api/skill/apphub-release/files/${SKILL_VERSION}/VERSION`, sha256: 'b'.repeat(64), size: 5 },
+    { path: 'scripts/apphub.mjs', url: `/api/skill/apphub-release/files/${SKILL_VERSION}/scripts/apphub.mjs`, sha256: 'c'.repeat(64), size: 14 },
+  ],
+  installer: { path: 'install.mjs', url: '/api/skill/apphub-release/install.mjs', sha256: 'd'.repeat(64), size: 14 },
+  installDoc: { path: 'INSTALL.md', url: '/api/skill/apphub-release', sha256: 'e'.repeat(64), size: 9 },
+}))
 
 /** admin123 的 BCrypt 散列（与种子迁移同源） */
 const PASSWORD_HASH = '$2a$10$8yeFDSyUDUfl4SwuLGEah.XGaPS4uQLJb53EwXiCqXjUyxFKFAkLC'
@@ -292,6 +318,7 @@ describe('AppcenterModule (e2e)', () => {
 
   afterAll(async () => {
     await app.close()
+    fs.rmSync(skillDistDir, { recursive: true, force: true })
   })
 
   it('注册应用应响应完整凭证并预置 stable 通道（主张 A1）', async () => {
@@ -685,5 +712,28 @@ describe('AppcenterModule (e2e)', () => {
     await app.get(AsyncTaskQueue).drain()
     const appcenterLogs = operateLogs.filter(log => log.module === '应用管理')
     expect(appcenterLogs.length).toBeGreaterThanOrEqual(4)
+  })
+
+  it('技能分发接口公开可达（免 JWT / 免签名），版本与路径按清单校验', async () => {
+    // 冷启动说明：直接返回 Markdown（StreamableFile 绕开统一响应包装）
+    const doc = await request(server).get('/api/skill/apphub-release').expect(200)
+    expect(doc.headers['content-type']).toContain('text/markdown')
+    expect(doc.text).toBe('# 安装说明')
+
+    const manifest = await request(server).get('/api/skill/apphub-release/manifest').expect(200)
+    expect((manifest.body as { version: string }).version).toBe(SKILL_VERSION)
+
+    const installer = await request(server).get('/api/skill/apphub-release/install.mjs').expect(200)
+    expect(installer.headers['content-type']).toContain('javascript')
+    expect(installer.text).toBe('console.log(1)')
+
+    // 版本化文件：SKILL.md / VERSION / scripts/*
+    await request(server).get(`/api/skill/apphub-release/files/${SKILL_VERSION}/SKILL.md`).expect(200).expect('# 技能指令')
+    await request(server).get(`/api/skill/apphub-release/files/${SKILL_VERSION}/VERSION`).expect(200).expect(SKILL_VERSION)
+    await request(server).get(`/api/skill/apphub-release/files/${SKILL_VERSION}/scripts/apphub.mjs`).expect(200).expect('console.log(2)')
+
+    // 版本不匹配 / 清单外文件均 404
+    await request(server).get('/api/skill/apphub-release/files/9.9.9/SKILL.md').expect(404)
+    await request(server).get(`/api/skill/apphub-release/files/${SKILL_VERSION}/scripts/evil.mjs`).expect(404)
   })
 })

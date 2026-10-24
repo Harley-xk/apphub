@@ -14,6 +14,12 @@
 
 订阅链路依赖会员身份（下单需会员令牌），因此接入订阅前须先完成会员认证接入；更新检测与两者完全无关。发版 Skill 走平台管理端接口（应用开发侧项目的 agent 安装 `skills/apphub-release/` 即可完成打包 → 上传 → 发布 → 验证全流程闭环），与更新检测手册面向的客户端接入互补。
 
+### 1.1 安装或更新发版技能
+
+- **未安装 / 旧版没有自更新能力**：只需把 `https://appcenter.witice.top/api/skill/apphub-release` 交给 Claude 等 agent（详见 [技能安装与更新](技能安装与更新.md)）；该接口由平台托管，不依赖技能包，无需平台账号
+- **已安装且可自更新**：在应用工程执行 `node .claude/skills/apphub-release/scripts/apphub.mjs self-update`（加 `--check` 只检查）
+- **版本检查（公开接口）**：`https://appcenter.witice.top/api/skill/apphub-release/manifest`
+
 ## 2. 通用约定（三册共用）
 
 ### 2.1 服务地址

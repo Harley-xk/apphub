@@ -2,22 +2,30 @@
   作者: Harley-xk
   创建: 2026-10-16
 
-  描述: 版本安装包抽屉：版本下包记录列表（上传 / 删除仅草稿版本开放，下载不限状态），框架产物列提示发布校验配套
+  描述: 版本安装包抽屉：版本下包记录列表（draft / published 可增删换包，offline 只读，下载不限状态）
 -->
 <template>
   <el-drawer v-model="visible" :title="drawerTitle" size="900px">
     <div class="drawer-body">
       <el-alert
-        v-if="version?.status !== 'draft'"
+        v-if="version?.status === 'offline'"
         type="info"
         :closable="false"
         show-icon
-        :title="`当前版本为${statusLabel}状态，包记录只读（上传与删除仅草稿版本开放，安装包随时可下载）`"
+        title="当前版本已下线，包记录只读（下线版本不再参与更新检测，重新分发请新建版本；安装包仍可下载）"
+        class="tip-bar"
+      />
+      <el-alert
+        v-else-if="version?.status === 'published'"
+        type="warning"
+        :closable="false"
+        show-icon
+        title="当前版本已发布：可补传新平台包或替换已上传包。替换 / 删除会即时影响该平台分发，但版本号未变，已安装客户端不会自动更新"
         class="tip-bar"
       />
       <div class="drawer-toolbar">
         <el-button
-          v-if="version?.status === 'draft'"
+          v-if="version?.status !== 'offline'"
           v-hasPermi="'appcenter:version:update'"
           type="primary"
           @click="uploadDialogRef?.open({ version: version!, framework })"
@@ -74,7 +82,16 @@
             </span>
           </el-tooltip>
           <el-button
-            v-if="version?.status === 'draft'"
+            v-if="version?.status !== 'offline'"
+            v-hasPermi="'appcenter:version:update'"
+            link
+            type="primary"
+            @click="handleReplace(row)"
+          >
+            替换
+          </el-button>
+          <el-button
+            v-if="version?.status !== 'offline'"
             v-hasPermi="'appcenter:version:update'"
             link
             type="danger"
@@ -119,12 +136,12 @@ const STATUS_LABELS: Record<string, string> = {
 
 /** 列定义（抽屉内非页面级表格，持久化 key 显式指定；总宽收敛在抽屉内容宽内避免横向滚动拆分 fixed 列） */
 const columns: ApphubTableColumn[] = [
-  { field: 'platform', title: '平台 / 架构', width: 120, slot: 'platform' },
+  { field: 'platform', title: '平台 / 架构', width: 110, slot: 'platform' },
   { field: 'fileName', title: '文件名', minWidth: 180, slot: 'fileName' },
   { field: 'fileSize', title: '大小', width: 90, slot: 'fileSize' },
-  { field: 'artifacts', title: '框架产物', width: 210, slot: 'artifacts' },
-  { field: 'createTime', title: '登记时间', width: 160, formatter: dateTimeFormatter },
-  { field: 'action', title: '操作', width: 100, fixed: 'right', slot: 'action' },
+  { field: 'artifacts', title: '框架产物', width: 190, slot: 'artifacts' },
+  { field: 'createTime', title: '登记时间', width: 150, formatter: dateTimeFormatter },
+  { field: 'action', title: '操作', width: 130, fixed: 'right', slot: 'action' },
 ]
 
 const visible = ref(false)
@@ -143,8 +160,6 @@ const downloadingId = ref<string | null>(null)
 const drawerTitle = computed(() =>
   version.value ? `安装包 - ${version.value.version}（${STATUS_LABELS[version.value.status] ?? version.value.status}）` : '安装包',
 )
-
-const statusLabel = computed(() => (version.value ? STATUS_LABELS[version.value.status] ?? version.value.status : ''))
 
 /** 打开抽屉：固定版本上下文并加载包列表 */
 function open(context: { version: VersionVO, framework: string | null }): void {
@@ -203,10 +218,21 @@ async function handleDownload(pkg: PackageVO): Promise<void> {
   }
 }
 
+/** 替换已上传包：锁定槽位，走上传弹窗的替换模式（版本号不变，仅影响新下载） */
+function handleReplace(pkg: PackageVO): void {
+  if (!version.value) {
+    return
+  }
+  uploadDialogRef.value?.open({ version: version.value, framework: framework.value, replaceTarget: pkg })
+}
+
 async function handleDelete(pkg: PackageVO): Promise<void> {
+  const isPublished = version.value?.status === 'published'
   const confirmed = await ElMessageBox.confirm(
-    `确定删除「${pkg.fileName}」吗？将连带清理 OSS 对象并释放 (platform, arch) 槽位`,
-    '提示',
+    isPublished
+      ? `确定删除「${pkg.fileName}」吗？该平台将立即回退到更早的有包版本；若无更早版本则新用户拿不到更新。已安装客户端不受影响，但重新分发需新建版本。`
+      : `确定删除「${pkg.fileName}」吗？将连带清理 OSS 对象并释放 (platform, arch) 槽位`,
+    isPublished ? '撤回该平台分发' : '提示',
     { type: 'warning' },
   )
     .then(() => true)

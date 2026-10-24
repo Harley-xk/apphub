@@ -2,16 +2,25 @@
   作者: Harley-xk
   创建: 2026-10-16
 
-  描述: 安装包上传弹窗：STS 直传（对象键后端下发）+ 流式哈希自动计算 + 登记回调；ios 仅登记元信息
+  描述: 安装包上传弹窗：STS 直传（对象键后端下发）+ 流式哈希自动计算 + 登记回调；ios 仅登记元信息；
+        支持替换已发布包（锁定平台 / 架构，后端事务内换记录）
 -->
 <template>
   <el-dialog
     v-model="visible"
-    title="上传安装包"
+    :title="isReplace ? '替换安装包' : '上传安装包'"
     width="600px"
     :close-on-click-modal="false"
     @closed="resetForm"
   >
+    <el-alert
+      v-if="isReplace"
+      type="warning"
+      :closable="false"
+      show-icon
+      title="替换只影响之后的新下载 / 新安装；版本号未变，已安装客户端不会自动更新，修复存量用户请发布新版本"
+      class="tip-bar"
+    />
     <el-alert
       v-if="framework === 'electron'"
       type="info"
@@ -31,7 +40,7 @@
 
     <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
       <el-form-item label="平台" prop="platform">
-        <el-radio-group v-model="form.platform" @update:model-value="handlePlatformChange">
+        <el-radio-group v-model="form.platform" :disabled="isReplace" @update:model-value="handlePlatformChange">
           <el-radio-button value="windows">
             Windows
           </el-radio-button>
@@ -50,7 +59,7 @@
         </el-radio-group>
       </el-form-item>
       <el-form-item v-if="isDesktop" label="架构" prop="arch">
-        <el-radio-group v-model="form.arch">
+        <el-radio-group v-model="form.arch" :disabled="isReplace">
           <el-radio-button value="x64">
             x64
           </el-radio-button>
@@ -120,7 +129,7 @@
         取消
       </el-button>
       <el-button type="primary" :loading="submitting" @click="handleSubmit">
-        {{ stage || '上传并登记' }}
+        {{ stage || (isReplace ? '替换并登记' : '上传并登记') }}
       </el-button>
     </template>
   </el-dialog>
@@ -130,16 +139,20 @@
 import { ElMessage, type FormInstance, type FormRules, type UploadFile } from 'element-plus'
 import { computed, reactive, ref } from 'vue'
 
-import type { PackageRegisterData } from '@/api/appcenter/package'
+import type { PackageRegisterData, PackageVO } from '@/api/appcenter/package'
 import { issueUploadToken, registerPackage } from '@/api/appcenter/package'
 import type { VersionVO } from '@/api/appcenter/version'
 import { hashFile, IOS_SHA256_PLACEHOLDER, putObject } from '@/views/appcenter/version/useOssUploader'
 
 const emit = defineEmits<{ saved: [] }>()
 
-/** 上传上下文：草稿版本与应用框架（框架决定配套产物提示与登记字段） */
+/** 上传上下文：版本 / 应用框架（框架决定配套产物提示与登记字段）/ 替换目标（有值即替换模式） */
 const version = ref<VersionVO | null>(null)
 const framework = ref<string | null>(null)
+const replaceTarget = ref<PackageVO | null>(null)
+
+/** 替换模式：锁定平台 / 架构，仅允许换产物 */
+const isReplace = computed(() => replaceTarget.value !== null)
 
 const visible = ref(false)
 const submitting = ref(false)
@@ -172,15 +185,22 @@ const rules: FormRules = {
   ],
 }
 
-/** 打开弹窗（仅草稿版本可上传，入口由包面板按状态控制） */
-function open(context: { version: VersionVO, framework: string | null }): void {
+/** 打开弹窗（draft / published 可上传，入口由包面板按状态控制；传 replaceTarget 即替换模式） */
+function open(context: { version: VersionVO, framework: string | null, replaceTarget?: PackageVO }): void {
   version.value = context.version
   framework.value = context.framework
+  replaceTarget.value = context.replaceTarget ?? null
+  if (context.replaceTarget) {
+    // 替换锁定原槽位：平台 / 架构不可改，避免误覆盖其它平台
+    form.platform = context.replaceTarget.platform
+    form.arch = context.replaceTarget.arch ?? 'x64'
+  }
   visible.value = true
 }
 
 function resetForm(): void {
   formRef.value?.resetFields()
+  replaceTarget.value = null
   form.platform = 'windows'
   form.arch = 'x64'
   form.fileName = ''
@@ -249,6 +269,7 @@ async function handleSubmit(): Promise<void> {
         platform: form.platform,
         fileName: form.fileName,
         sha256: IOS_SHA256_PLACEHOLDER,
+        ...(isReplace.value ? { replaceExisting: true } : {}),
       }
     }
     else {
@@ -261,6 +282,7 @@ async function handleSubmit(): Promise<void> {
         platform: form.platform,
         ...(isDesktop.value ? { arch: form.arch } : {}),
         fileName: file.value.name,
+        ...(isReplace.value ? { replaceExisting: true } : {}),
       })
       stage.value = '直传 OSS…'
       await putObject(token, token.objectKey, file.value)
@@ -277,6 +299,7 @@ async function handleSubmit(): Promise<void> {
         ...(blockmapHash.value
           ? { blockmapSha512: blockmapHash.value.sha512, blockmapFileSize: blockmapHash.value.size }
           : {}),
+        ...(isReplace.value ? { replaceExisting: true } : {}),
       }
     }
     if (form.platform !== 'ios' && framework.value === 'tauri') {
@@ -285,7 +308,7 @@ async function handleSubmit(): Promise<void> {
 
     stage.value = '登记包记录…'
     await registerPackage(target.id, register)
-    ElMessage.success('上传并登记成功')
+    ElMessage.success(isReplace.value ? '替换成功' : '上传并登记成功')
     visible.value = false
     emit('saved')
   }

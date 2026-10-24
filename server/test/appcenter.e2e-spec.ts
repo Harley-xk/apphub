@@ -136,6 +136,15 @@ const channelRepo = makeMemoryRepo<AppChannelEntity>(channels)
 const versionRepo = makeMemoryRepo<AppVersionEntity>(versions)
 const packageRepo = makeMemoryRepo<AppPackageEntity>(packages)
 
+// 替换包走 manager.transaction：事务桩直连同一内存集合（软删旧包 + 插入新包）
+const packageRepoWithManager = {
+  ...packageRepo,
+  manager: {
+    transaction: <T>(run: (manager: unknown) => Promise<T>) =>
+      run({ getRepository: () => packageRepo }),
+  },
+}
+
 // AppService.create 走 manager.transaction：事务桩按实体名分流到同一内存集合
 const appRepoWithManager = {
   ...appRepo,
@@ -251,7 +260,7 @@ describe('AppcenterModule (e2e)', () => {
       .overrideProvider(getRepositoryToken(AppVersionEntity))
       .useValue(versionRepo)
       .overrideProvider(getRepositoryToken(AppPackageEntity))
-      .useValue(packageRepo)
+      .useValue(packageRepoWithManager)
       .overrideProvider(STORAGE_SERVICE)
       .useValue(storageStub)
       .overrideProvider(getRepositoryToken(OperateLogEntity))
@@ -564,6 +573,66 @@ describe('AppcenterModule (e2e)', () => {
         expect((res.body as ApiResponse<unknown>).code).toBe(300400005)
       })
 
+    // ===== 发布后平台包维护（设计 §3.2.1）=====
+
+    // 补包：已发布版本新增 macOS 平台（不影响既有 Windows 候选）
+    const macFileName = 'app-1.3.0.dmg'
+    const macKey = `packages/${appKey}/stable/1.3.0/macos-universal/${macFileName}`
+    const macTokenRes = await request(server)
+      .post(`/api/appcenter/version/${versionId}/package/upload-token`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ platform: 'macos', arch: 'universal', fileName: macFileName })
+      .expect(200)
+    expect((macTokenRes.body as ApiResponse<{ objectKey: string }>).data!.objectKey).toBe(macKey)
+    uploadedHeads[macKey] = { contentLength: 2048 }
+    await request(server)
+      .post(`/api/appcenter/version/${versionId}/package`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        platform: 'macos', arch: 'universal', fileName: macFileName,
+        objectKey: macKey, sha256: 'b'.repeat(64), sha512: 'bWFjLXNoYTUxMg==',
+      })
+      .expect(200)
+
+    // 换包：replaceExisting 生成带随机批次段的新对象键，旧记录软删、旧对象清理
+    const replaceTokenRes = await request(server)
+      .post(`/api/appcenter/version/${versionId}/package/upload-token`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ platform: 'windows', arch: 'x64', fileName: 'app-setup-1.3.0.exe', replaceExisting: true })
+      .expect(200)
+    const replacedKey = (replaceTokenRes.body as ApiResponse<{ objectKey: string }>).data!.objectKey
+    expect(replacedKey).toMatch(
+      new RegExp(`^packages/${appKey}/stable/1\\.3\\.0/windows-x64/[0-9a-f]{8}/app-setup-1\\.3\\.0\\.exe$`),
+    )
+    uploadedHeads[replacedKey] = { contentLength: 2097152 }
+    await request(server)
+      .post(`/api/appcenter/version/${versionId}/package`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        platform: 'windows', arch: 'x64', fileName: 'app-setup-1.3.0.exe',
+        objectKey: replacedKey, sha256: 'c'.repeat(64), sha512: 'cmVwbGFjZWQtc2hhNTEy', replaceExisting: true,
+      })
+      .expect(200)
+    expect(deletedObjectKeys).toContain(expectedKey)
+
+    // 包列表：Windows 指向新对象键（fileSize 以新 HeadObject 为准），macOS 已补齐
+    const afterMaintain = await request(server)
+      .get(`/api/appcenter/version/${versionId}/package`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(200)
+    const maintained = (afterMaintain.body as ApiResponse<{ id: string, platform: string, fileSize: number, ossObjectKey: string }[]>).data!
+    expect(maintained).toHaveLength(2)
+    const windowsPkg = maintained.find(pkg => pkg.platform === 'windows')!
+    expect(windowsPkg.ossObjectKey).toBe(replacedKey)
+    expect(windowsPkg.fileSize).toBe(2097152)
+
+    // 删包：published 下删除 macOS 包（撤回该平台分发）
+    const macPkg = maintained.find(pkg => pkg.platform === 'macos')!
+    await request(server)
+      .delete(`/api/appcenter/version/${versionId}/package/${macPkg.id}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(200)
+
     // published 仅允许改说明与强制标记（300300004）
     await request(server)
       .put(`/api/appcenter/version/${versionId}`)
@@ -596,6 +665,16 @@ describe('AppcenterModule (e2e)', () => {
       .post(`/api/appcenter/version/${versionId}/offline`)
       .set('Authorization', `Bearer ${adminToken}`)
       .expect(200)
+
+    // 下线后包层冻结：签发直传凭证返回 300300004（重新分发须新建版本）
+    await request(server)
+      .post(`/api/appcenter/version/${versionId}/package/upload-token`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ platform: 'linux', arch: 'x64', fileName: 'app-1.3.0.AppImage' })
+      .expect(400)
+      .expect((res) => {
+        expect((res.body as ApiResponse<unknown>).code).toBe(300300004)
+      })
     await request(server)
       .delete(`/api/appcenter/app/${appId}`)
       .set('Authorization', `Bearer ${adminToken}`)

@@ -49,9 +49,10 @@ function makeService(options: {
   const issuedCredentials: { objectKey: string, blockmapObjectKey: string }[] = []
   const deletedObjectKeys: string[] = []
   const savedPackages: PackageRow[] = []
+  const removedPackages: PackageRow[] = []
   const signedUrls: { objectKey: string, expiresSeconds?: number, fileName?: string }[] = []
 
-  const packageRepository = {
+  const packageRepositoryDouble = {
     find: (findOptions: { where?: Record<string, unknown> }) =>
       Promise.resolve(packages.filter(pkg => matches(pkg, findOptions.where))),
     findOne: (findOptions: { where?: Record<string, unknown> }) =>
@@ -61,7 +62,18 @@ function makeService(options: {
       return Promise.resolve({ id: 'pkg-new', ...entity })
     },
     create: (data: Partial<AppPackageEntity>) => ({ ...data }),
-    softRemove: (entity: PackageRow) => Promise.resolve(entity),
+    softRemove: (entity: PackageRow) => {
+      removedPackages.push(entity)
+      return Promise.resolve(entity)
+    },
+  }
+  // 替换在事务内软删旧包 + 插入新包：测试用同一内存仓库模拟 manager
+  const packageRepository = {
+    ...packageRepositoryDouble,
+    manager: {
+      transaction: (callback: (manager: { getRepository: () => typeof packageRepositoryDouble }) => Promise<string>) =>
+        callback({ getRepository: () => packageRepositoryDouble }),
+    },
   }
   const versionRepository = {
     findOne: (findOptions: { where?: Record<string, unknown> }) =>
@@ -103,7 +115,7 @@ function makeService(options: {
     storageService as StorageService,
     appService as never,
   )
-  return { service, issuedCredentials, deletedObjectKeys, savedPackages, signedUrls }
+  return { service, issuedCredentials, deletedObjectKeys, savedPackages, removedPackages, signedUrls }
 }
 
 describe('PackageService（直传凭证）', () => {
@@ -114,9 +126,17 @@ describe('PackageService（直传凭证）', () => {
     expect(issuedCredentials[0]?.blockmapObjectKey).toBe('packages/ah_demo/stable/1.3.0/windows-x64/app-setup-1.3.0.exe.blockmap')
   })
 
-  it('非草稿版本不允许申请凭证（状态机）', async () => {
-    const { service } = makeService({
+  it('已发布版本允许申请凭证（发布后补包 / 换包）', async () => {
+    const { service, issuedCredentials } = makeService({
       apps: [APP], channels: [CHANNEL], versions: [{ ...DRAFT, status: 'published' }],
+    })
+    await service.issueUploadToken('v1', { platform: 'macos', arch: 'universal', fileName: 'a.dmg' }, USER_ID)
+    expect(issuedCredentials[0]?.objectKey).toBe('packages/ah_demo/stable/1.3.0/macos-universal/a.dmg')
+  })
+
+  it('已下线版本不允许申请凭证（终态冻结）', async () => {
+    const { service } = makeService({
+      apps: [APP], channels: [CHANNEL], versions: [{ ...DRAFT, status: 'offline' }],
     })
     await expect(
       service.issueUploadToken('v1', { platform: 'windows', arch: 'x64', fileName: 'a.exe' }, USER_ID),
@@ -133,6 +153,26 @@ describe('PackageService（直传凭证）', () => {
     await expect(
       service.issueUploadToken('v1', { platform: 'android', fileName: 'b.apk' }, USER_ID),
     ).rejects.toMatchObject({ code: AppcenterErrorCode.PACKAGE_PLATFORM_DUPLICATE.code })
+  })
+
+  it('替换模式应要求槽位已占用（空槽位替换报 PACKAGE_REPLACE_TARGET_NOT_EXISTS）', async () => {
+    const { service } = makeService({ apps: [APP], channels: [CHANNEL], versions: [DRAFT] })
+    await expect(
+      service.issueUploadToken('v1', { platform: 'windows', arch: 'x64', fileName: 'a.exe', replaceExisting: true }, USER_ID),
+    ).rejects.toMatchObject({ code: AppcenterErrorCode.PACKAGE_REPLACE_TARGET_NOT_EXISTS.code })
+  })
+
+  it('替换模式的对象键应插入随机批次段（避免同名覆盖旧对象）', async () => {
+    const { service, issuedCredentials } = makeService({
+      apps: [APP],
+      channels: [CHANNEL],
+      versions: [{ ...DRAFT, status: 'published' }],
+      packages: [{ versionId: 'v1', platform: 'windows', arch: 'x64', fileName: 'a.exe', fileSize: 1, sha256: 'x', ossObjectKey: 'k' }],
+    })
+    await service.issueUploadToken('v1', { platform: 'windows', arch: 'x64', fileName: 'a.exe', replaceExisting: true }, USER_ID)
+    expect(issuedCredentials[0]?.objectKey).toMatch(
+      /^packages\/ah_demo\/stable\/1\.3\.0\/windows-x64\/[0-9a-f]{8}\/a\.exe$/,
+    )
   })
 })
 
@@ -210,6 +250,46 @@ describe('PackageService（登记）', () => {
       service.register('v1', { platform: 'windows', arch: 'x64', fileName: 'a.exe', sha256: 'a'.repeat(64) }, USER_ID),
     ).rejects.toMatchObject({ code: AppcenterErrorCode.PACKAGE_OBJECT_NOT_EXISTS.code })
   })
+
+  it('已发布版本登记须校验框架产物（electron 缺 sha512 拒绝，避免适配端点失联）', async () => {
+    const { service } = makeService({
+      apps: [APP], channels: [CHANNEL], versions: [{ ...DRAFT, status: 'published' }], heads: HEADS,
+    })
+    await expect(
+      service.register('v1', {
+        platform: 'macos', arch: 'universal', fileName: 'a.dmg',
+        objectKey: 'packages/ah_demo/stable/1.3.0/windows-x64/a.exe',
+        sha256: 'a'.repeat(64),
+      }, USER_ID),
+    ).rejects.toMatchObject({ code: AppcenterErrorCode.FRAMEWORK_ARTIFACT_MISSING.code })
+  })
+
+  it('替换登记应在事务内软删旧包、插入新包并清理旧 OSS 对象', async () => {
+    const OLD: PackageRow = {
+      id: 'p1', versionId: 'v1', platform: 'windows', arch: 'x64', fileName: 'a.exe', fileSize: 1,
+      sha256: 'x', ossObjectKey: 'packages/ah_demo/stable/1.3.0/windows-x64/a.exe',
+      blockmapObjectKey: 'packages/ah_demo/stable/1.3.0/windows-x64/a.exe.blockmap',
+    }
+    const newKey = 'packages/ah_demo/stable/1.3.0/windows-x64/abcd1234/a.exe'
+    const { service, savedPackages, removedPackages, deletedObjectKeys } = makeService({
+      apps: [APP],
+      channels: [CHANNEL],
+      versions: [{ ...DRAFT, status: 'published' }],
+      packages: [OLD],
+      heads: { [newKey]: { contentLength: 2048 } },
+    })
+    const newId = await service.register('v1', {
+      platform: 'windows', arch: 'x64', fileName: 'a.exe',
+      objectKey: newKey, sha256: 'a'.repeat(64), sha512: 'c2hhNTEy', replaceExisting: true,
+    }, USER_ID)
+    expect(newId).toBe('pkg-new')
+    expect(removedPackages).toEqual([OLD])
+    expect(savedPackages[0]?.ossObjectKey).toBe(newKey)
+    expect(savedPackages[0]?.fileSize).toBe(2048)
+    // 旧对象与 blockmap 均在替换成功后清理
+    expect(deletedObjectKeys).toContain(OLD.ossObjectKey)
+    expect(deletedObjectKeys).toContain(OLD.blockmapObjectKey)
+  })
 })
 
 describe('PackageService（下载）', () => {
@@ -269,13 +349,21 @@ describe('PackageService（删除）', () => {
     })
   })
 
-  it('非草稿版本的包不允许删除', async () => {
+  it('已下线版本的包不允许删除（终态冻结）', async () => {
     const { service } = makeService({
-      apps: [APP], channels: [CHANNEL], versions: [{ ...DRAFT, status: 'published' }], packages: [{ ...PKG, id: 'p1' }],
+      apps: [APP], channels: [CHANNEL], versions: [{ ...DRAFT, status: 'offline' }], packages: [{ ...PKG, id: 'p1' }],
     })
     await expect(service.remove('v1', 'p1', USER_ID)).rejects.toMatchObject({
       code: AppcenterErrorCode.VERSION_STATUS_FORBIDDEN.code,
     })
+  })
+
+  it('已发布版本的包允许删除（撤回该平台分发）', async () => {
+    const { service, deletedObjectKeys } = makeService({
+      apps: [APP], channels: [CHANNEL], versions: [{ ...DRAFT, status: 'published' }], packages: [{ ...PKG, id: 'p1' }],
+    })
+    await expect(service.remove('v1', 'p1', USER_ID)).resolves.toBeUndefined()
+    expect(deletedObjectKeys).toContain(PKG.ossObjectKey)
   })
 
   it('删除包应连带清理安装包与 blockmap 的 OSS 对象', async () => {

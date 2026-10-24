@@ -2,7 +2,7 @@
  * 作者: Harley-xk
  * 创建: 2026-10-16
  *
- * 描述: 包控制器（版本作用域）：列表 / 下载 URL 签发 / 直传凭证签发 / 登记 / 删除（上传与登记仅草稿版本，下载不限状态）
+ * 描述: 包控制器（版本作用域）：列表 / 下载 URL 签发 / 直传凭证签发 / 登记 / 删除（draft / published 可维护，offline 冻结；下载不限状态）
  */
 import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common'
 import { ApiOperation, ApiTags } from '@nestjs/swagger'
@@ -41,7 +41,7 @@ export class PackageController {
     return this.packageService.getDownloadUrl(versionId, pkgId, user.id)
   }
 
-  @ApiOperation({ summary: '签发 STS 直传凭证（对象键后端生成，policy 收敛精确键 PutObject）' })
+  @ApiOperation({ summary: '签发 STS 直传凭证（draft / published；replaceExisting 时要求槽位已占用，对象键带随机批次段）' })
   @OperateLog('应用管理', '申请包上传凭证')
   @RequirePermissions(APPCENTER_PERMISSION_CODES.VERSION_UPDATE)
   @Post('upload-token')
@@ -53,7 +53,7 @@ export class PackageController {
     return this.packageService.issueUploadToken(versionId, dto, user.id)
   }
 
-  @ApiOperation({ summary: '登记包记录（HeadObject 校验，file_size 以服务端为准）' })
+  @ApiOperation({ summary: '登记包记录（HeadObject 校验，file_size 以服务端为准；published 校验框架产物；替换事务内软删旧包）' })
   @OperateLog('应用管理', '登记安装包')
   @RequirePermissions(APPCENTER_PERMISSION_CODES.VERSION_UPDATE)
   @Post()
@@ -65,7 +65,7 @@ export class PackageController {
     return this.packageService.register(versionId, dto, user.id)
   }
 
-  @ApiOperation({ summary: '删除包（仅草稿版本，连带清理 OSS 对象）' })
+  @ApiOperation({ summary: '删除包（draft / published；published 删除即撤回该平台分发；连带清理 OSS 对象）' })
   @OperateLog('应用管理', '删除安装包')
   @RequirePermissions(APPCENTER_PERMISSION_CODES.VERSION_UPDATE)
   @Delete(':pkgId')

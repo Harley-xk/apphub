@@ -2,7 +2,7 @@
  * 作者: Harley-xk
  * 创建: 2026-10-16
  *
- * 描述: 版本包接口封装：列表 / 下载 URL 签发 / STS 直传凭证签发 / 登记回调 / 删除（上传与登记仅草稿版本，下载不限状态）
+ * 描述: 版本包接口封装：列表 / 下载 URL 签发 / STS 直传凭证签发 / 登记回调 / 删除（draft / published 可维护，offline 冻结；下载不限状态）
  */
 import { http } from '@/api/http'
 
@@ -57,6 +57,8 @@ export interface UploadTokenData {
   platform: string
   arch?: string
   fileName: string
+  /** 替换已占用槽位（对象键由后端插入随机批次段，避免覆盖旧对象） */
+  replaceExisting?: boolean
 }
 
 /** 包登记入参（直传完成后的回调登记，file_size 以服务端 HeadObject 为准） */
@@ -71,6 +73,8 @@ export interface PackageRegisterData {
   minisignSignature?: string
   blockmapSha512?: string
   blockmapFileSize?: number
+  /** 替换已占用槽位：后端事务内软删旧包并清理旧 OSS 对象 */
+  replaceExisting?: boolean
 }
 
 export async function getPackageList(versionId: string): Promise<PackageVO[]> {

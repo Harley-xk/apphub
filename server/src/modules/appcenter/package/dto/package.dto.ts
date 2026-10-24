@@ -7,6 +7,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import { Type } from 'class-transformer'
 import {
+  IsBoolean,
   IsIn,
   IsInt,
   IsOptional,
@@ -74,6 +75,11 @@ export class PackageUploadTokenDto {
   @Matches(/^[^/\\\s]+$/, { message: '文件名不能包含路径分隔符或空白字符' })
   @MaxLength(255)
   fileName: string
+
+  @ApiPropertyOptional({ description: '替换已占用槽位（需槽位已有包；对象键插入随机批次段，避免覆盖旧对象）', example: false })
+  @IsOptional()
+  @IsBoolean()
+  replaceExisting?: boolean
 }
 
 /** 直传凭证响应（对象键 + STS 临时凭证，policy 收敛为这两个键的 PutObject） */
@@ -130,4 +136,9 @@ export class PackageRegisterDto {
   @IsInt()
   @Min(0)
   blockmapFileSize?: number
+
+  @ApiPropertyOptional({ description: '替换已占用槽位：登记时事务内软删旧包并清理旧 OSS 对象（需槽位已有包）', example: false })
+  @IsOptional()
+  @IsBoolean()
+  replaceExisting?: boolean
 }

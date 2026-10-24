@@ -215,8 +215,10 @@ async function requireVersion(client, appId, channel, version, expectedStatus, a
   const record = await findVersion(client, appId, channel.id, version)
   if (!record)
     fail(`通道 ${channel.code} 下不存在版本 ${version}，请先 create-version（${actionLabel}）`)
-  if (expectedStatus && record.status !== expectedStatus)
-    fail(`版本 ${version} 当前状态为 ${record.status}，${actionLabel}要求 ${expectedStatus}（状态机约束，见平台设计 §3.2）`)
+  // expectedStatus 支持单值或数组（平台包维护同时允许 draft / published，offline 冻结）
+  const expected = expectedStatus ? (Array.isArray(expectedStatus) ? expectedStatus : [expectedStatus]) : []
+  if (expected.length > 0 && !expected.includes(record.status))
+    fail(`版本 ${version} 当前状态为 ${record.status}，${actionLabel}要求 ${expected.join(' / ')}（状态机约束，见平台设计 §3.2）`)
   return record
 }
 
@@ -362,13 +364,18 @@ async function cmdCreateVersion(client, config, args) {
 async function cmdUpload(client, config, args) {
   const sigFile = args.values['sig-file']
   const { platform, arch, file, blockmap } = args.values
+  const replaceExisting = Boolean(args.values.replace)
   const stat = await fs.stat(file).catch(() => null)
   if (!stat?.isFile())
     fail(`安装包文件不存在：${file}`)
 
   const app = await resolveApp(client)
   const channel = await resolveChannel(client, app.id, config.channel)
-  const version = await requireVersion(client, app.id, channel, args.values.version, 'draft', '上传安装包')
+  const version = await requireVersion(client, app.id, channel, args.values.version, ['draft', 'published'], '上传安装包')
+  if (version.status === 'published' && replaceExisting) {
+    console.log('  注意：替换只影响之后的新下载 / 新安装；版本号未变，已安装客户端不会自动更新。')
+    console.log('        修复存量用户请发布新版本。')
+  }
 
   ok(`计算哈希（流式）：${file}`)
   const hash = await hashFile(file)
@@ -397,6 +404,8 @@ async function cmdUpload(client, config, args) {
   const uploadBody = { platform, fileName: path.basename(file) }
   if (arch)
     uploadBody.arch = arch
+  if (replaceExisting)
+    uploadBody.replaceExisting = true
   const credential = await client.request('POST', `/appcenter/version/${version.id}/package/upload-token`, { body: uploadBody })
   ok(`STS 凭证已签发（${credential.region} / ${credential.bucket}，${new Date(credential.expiration).toLocaleString()} 过期）`)
 
@@ -422,8 +431,10 @@ async function cmdUpload(client, config, args) {
     registerBody.blockmapSha512 = blockmapSha512
     registerBody.blockmapFileSize = blockmapFileSize
   }
+  if (replaceExisting)
+    registerBody.replaceExisting = true
   const packageId = await client.request('POST', `/appcenter/version/${version.id}/package`, { body: registerBody })
-  ok(`包记录已登记（packageId ${packageId}）：${platform}${arch ? `-${arch}` : ''} ← ${path.basename(file)}`)
+  ok(`包记录已${replaceExisting ? '替换' : '登记'}（packageId ${packageId}）：${platform}${arch ? `-${arch}` : ''} ← ${path.basename(file)}`)
 }
 
 async function cmdRemovePackage(client, config, args) {
@@ -437,7 +448,11 @@ async function cmdRemovePackage(client, config, args) {
   if (!target)
     fail(`版本 ${args.values.version} 下没有 ${args.values.platform}${args.values.arch ? `-${args.values.arch}` : ''} 的包记录`)
   await client.request('DELETE', `/appcenter/version/${version.id}/package/${target.id}`)
-  ok(`已删除包记录 ${target.fileName}（连带清理 OSS 对象；仅草稿版本可删）`)
+  ok(`已删除包记录 ${target.fileName}（连带清理 OSS 对象；draft / published 可删，offline 冻结）`)
+  if (version.status === 'published') {
+    console.log('  注意：已发布版本删除包会撤回该平台分发——该平台回退到更早的有包版本，')
+    console.log('        若无更早版本则新用户拿不到该版本；已安装客户端不受影响。')
+  }
 }
 
 async function cmdPublish(client, config, args) {
@@ -531,14 +546,15 @@ const COMMANDS = {
     },
   },
   upload: {
-    brief: '单包上传全链：哈希 → STS → OSS 直传 → 登记包记录',
+    brief: '单包上传全链：哈希 → STS → OSS 直传 → 登记包记录（draft / published）',
     options: {
-      version: { ...STRING, help: '所属版本号（必填，须为 draft）' },
+      version: { ...STRING, help: '所属版本号（必填；draft / published，offline 冻结）' },
       platform: { ...STRING, help: 'windows / macos / linux / android（必填）' },
       arch: { ...STRING, help: 'x64 / arm64 / universal（桌面端必填）' },
       file: { ...STRING, help: '安装包文件路径（必填）' },
       blockmap: { ...STRING, help: 'blockmap 差分文件路径（electron 可选）' },
       'sig-file': { ...STRING, help: 'minisign 签名文件路径（tauri 必需）' },
+      replace: { ...BOOLEAN, help: '替换已占用的平台槽位（已发布版本换包；仅影响新下载）' },
     },
     async run(client, config, args) {
       for (const key of ['version', 'platform', 'file']) {
@@ -549,7 +565,7 @@ const COMMANDS = {
     },
   },
   'remove-package': {
-    brief: '删版本下的包记录（槽位占用重传用）',
+    brief: '删版本下的包记录（draft / published；published 删除即撤回该平台分发）',
     options: {
       version: { ...STRING, help: '版本号（必填）' },
       platform: { ...STRING, help: '平台（必填）' },

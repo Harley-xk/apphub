@@ -1,6 +1,6 @@
 ---
 name: apphub-release
-description: 应用发版助手：向 apphub 应用管理平台发布新版本——自动打包、上传安装包（STS 直传 OSS）、创建/发布/验证版本、维护版本信息（更新说明、强制标记、下线）。当用户要求发版、发布新版本、上传安装包、更新版本信息、下线版本，或首次接入 apphub 平台发版时使用。
+description: 应用发版助手：向 apphub 应用管理平台发布新版本——自动打包、上传安装包（STS 直传 OSS）、创建/发布/验证版本、维护版本信息（更新说明、强制标记、下线），以及已发布版本补包 / 换包 / 撤回平台包。当用户要求发版、发布新版本、上传安装包、补传平台包、替换已发布包、更新版本信息、下线版本，或首次接入 apphub 平台发版时使用。
 ---
 
 # apphub 发版助手
@@ -48,6 +48,7 @@ description: 应用发版助手：向 apphub 应用管理平台发布新版本�
    `node scripts/apphub.mjs upload --version {版本} --platform {平台} --arch {架构} --file {安装包路径} [--blockmap {blockmap}] [--sig-file {签名文件}]`
    - electron 项目建议传 `--blockmap`（客户端获得差分更新）
    - tauri 项目必须传 `--sig-file`（发布前置校验强制 minisign 签名）
+   - 已发布版本的补包 / 换包 / 撤包不重走发布流程，操作见 §3
 7. **确认门（红线）**：发布即客户端可见。向用户呈现发布摘要——版本号 / 通道 / 各平台包与大小 / 更新说明 / 强制标记——明确同意后执行
    `node scripts/apphub.mjs publish --version {版本}`。
    **例外**：用户已明示「全自动 / 不要确认 / CI 模式」时跳过此门。
@@ -90,8 +91,11 @@ description: 应用发版助手：向 apphub 应用管理平台发布新版本�
 
 - **改更新说明 / 强制标记 / 标题**：`node scripts/apphub.mjs update-version --version {版本} [--notes {新说明}] [--force true|false] [--title {新标题}]`（draft 全字段可改；已发布版本仅说明与强制标记可改，服务端校验兜底）
 - **下线版本**：`node scripts/apphub.mjs offline --version {版本}`——终态操作，执行前须用户确认；下线后客户端回退看到次新已发布版本
-- **撤回草稿**：`node scripts/apphub.mjs delete-version --version {版本}`（连带清理已传包与 OSS 对象）
-- **换包重传**（draft 期产物传错）：`remove-package --version {版本} --platform {平台} [--arch {架构}]` 删旧包后重新 `upload`
+- **撤回草稿**：`node scripts/apphub.mjs delete-version --version {版本}`（连带清理已传包与 OSS 对象；仅 draft）
+- **已发布版本补平台包**（如 Windows 已发、macOS 后补）：直接 `upload --version {版本} --platform {平台} …`。槽位空闲即可上传，**不影响其它平台**；已发布版本登记会强制校验框架产物（electron sha512 / tauri minisign）
+- **已发布版本换包**（同平台产物有误）：`upload --version {版本} --platform {平台} [--arch {架构}] --file {新包} --replace`。服务端事务内替换记录并清理旧对象；**版本号不变，已安装客户端不会自动更新**，替换只服务新下载 / 新安装——要修复存量用户必须发新版本，执行前后都要向用户说明
+- **撤回已发布平台包**：`remove-package --version {版本} --platform {平台} [--arch {架构}]`——该平台回退到更早的有包版本，若无则新用户拿不到该版本；**执行前须用户确认**
+- **草稿期换包**：同样用 `upload --replace`，或 `remove-package` 后重新 `upload`（二选一，推荐 `--replace` 避免空档）
 
 ## 4. 错误处置
 
@@ -101,18 +105,20 @@ description: 应用发版助手：向 apphub 应用管理平台发布新版本�
 | 401 且重登仍失败 | 账号或权限问题 | 核对账号；联系平台方确认 appcenter 权限 |
 | `300300002` | 版本号非 semver | 修正版本号（MAJOR.MINOR.PATCH） |
 | `300300003` | 通道内版本号重复 | 已有草稿会自动复用；已发布则递增版本号重走流程 |
-| `300300004` | 状态机不允许 | draft 全改 / published 仅说明与强制标记 / offline 终态，按状态分流操作 |
+| `300300004` | 状态机不允许 | draft / published 可维护平台包与说明；offline 终态，按状态分流 |
 | `300300005` | 发布校验失败（无可用包） | 至少完成一个平台（非 web）的 upload 再发布 |
 | `300400001` | STS 签发失败 | OSS / STS 平台侧配置问题，报告用户联系平台方 |
-| `300400002` | 平台 / 架构槽位重复 | 确认产物无误后 remove-package 删旧重传 |
+| `300400002` | 平台 / 架构槽位重复 | 已发布版本换包加 `--replace` 重试；草稿也可 remove-package 后重传 |
 | `300400003` | 框架产物缺失 | electron：核对 sha512 对照环节；tauri：核对 `.sig` 是否产出 |
 | `300400004` | 包对象不存在 | 上传未完成即登记；直接重试 upload |
+| `300400007` | 替换目标不存在 | `--replace` 指向的槽位本无包：去掉 `--replace` 按新增补包重试 |
 | OSS `AccessDenied` | 直传被拒 | 凭证过期（重试会重新签发）或对象键不符；持续失败联系平台方 |
 | verify 失败 hasUpdate=false | 发布未生效 / 应用或通道停用 | 核对版本状态与通道状态后重验 |
 
 ## 5. 红线
 
-1. **publish 与 offline 前必须获用户确认**（发布即客户端可见、下线即终态）；仅当用户明示全自动时跳过
+1. **publish、offline、撤回已发布平台包前必须获用户确认**（发布即客户端可见、下线即终态、撤包即改变该平台分发）；仅当用户明示全自动时跳过
 2. **凭据不回显、不入库**：日志与汇报中不得出现密码 / 签名密钥；含 credentials 的配置文件必须已在 `.gitignore`
-3. **上传仅作用于 draft 版本**：服务端状态机兜底，报错即核对版本状态，勿绕行
-4. **产物哈希对照不一致即停止**：宁可中断发版，不登记错位产物
+3. **包维护作用于 draft / published，offline 冻结**：offline 报 `300300004` 即停止，重新分发须新建版本，勿绕行
+4. **替换 / 撤包不推动已安装客户端**：版本号未变时客户端按 semver 判断无更新；不得把「换包」当作修复存量用户的手段而不告知，修复存量必须发新版本
+5. **产物哈希对照不一致即停止**：宁可中断发版，不登记错位产物

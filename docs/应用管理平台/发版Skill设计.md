@@ -97,8 +97,8 @@ skills/apphub-release/
 | --- | --- | --- |
 | `status` | — | 连通自检：登录 → 应用信息（appKey / framework / 状态）→ 通道清单 → 各通道最新版本。首次接入与排障第一步 |
 | `create-version` | `--version` `--title` `[--notes]` `[--force]` `[--channel]` | 建草稿版本；**幂等**：同通道同版本已有 draft 直接复用并提示，已 published / offline 则报错 |
-| `upload` | `--platform` `[--arch]` `--file` `[--blockmap]` `[--sig-file]` | 单包上传全链：流式算 sha256（hex）/ sha512（base64）→ 读 minisign 签名 → 签发 STS → PutObject 安装包（及 blockmap）→ 登记包记录 |
-| `remove-package` | `--version` `--platform` `[--arch]` | 删版本下的包记录（连带清理 OSS 对象），槽位占用重传用 |
+| `upload` | `--version` `--platform` `[--arch]` `--file` `[--blockmap]` `[--sig-file]` `[--replace]` | 单包上传全链：流式算 sha256（hex）/ sha512（base64）→ 读 minisign 签名 → 签发 STS → PutObject 安装包（及 blockmap）→ 登记包记录。**draft / published 均可**（offline 冻结）：槽位空闲即补包；`--replace` 替换已占用槽位（已发布版本换包用，服务端事务内软删旧包） |
+| `remove-package` | `--version` `--platform` `[--arch]` | 删版本下的包记录（连带清理 OSS 对象）。draft / published 均可（offline 冻结）；published 下删除即撤回该平台分发，须先获用户确认 |
 | `publish` | `--version` `[--channel]` | 发布版本（状态机校验与产物完整性校验由服务端兜底） |
 | `verify` | `--expect` `--platform` `[--arch]` `[--channel]` `[--current]` | 调更新检测开放 API，断言 `latestVersion === expect` 且 `hasUpdate === true` |
 | `update-version` | `--version` `[--title]` `[--notes]` `[--force]` | 维护版本信息（draft 全字段可改；published 仅 notes / force，服务端状态机校验） |
@@ -182,12 +182,13 @@ sequenceDiagram
 | 401 token 失效 | JWT 过期 / 无权限 | 脚本自动重登仍失败则检查账号权限 |
 | `300300002`（003003002） | 版本号非 semver | 修版本号格式（MAJOR.MINOR.PATCH） |
 | `300300003`（003003003） | 通道内版本号重复 | 已有 draft 则复用（脚本幂等）；已发布则递增版本号 |
-| `300300004`（003003004） | 状态机不允许 | 读版本状态分流（draft 全改 / published 仅说明 / offline 终态） |
+| `300300004`（003003004） | 状态机不允许 | 读版本状态分流（draft / published 可维护平台包与说明；offline 终态） |
 | `300300005`（003003005） | 发布校验失败无可用包 | 先完成各平台 upload |
 | `300400001`（003004001） | STS 签发失败 | OSS / STS 配置问题，联系平台方 |
-| `300400002`（003004002） | 平台架构槽位重复 | 确认产物后 remove-package 删旧重传 |
+| `300400002`（003004002） | 平台架构槽位重复 | 已发布版本换包用 `upload --replace`；草稿也可 remove-package 后重传 |
 | `300400003`（003004003） | 框架产物缺失 | electron 查 sha512 对照 / tauri 查 .sig 产出 |
 | `300400004`（003004004） | 包对象不存在 | 上传未完成即登记（脚本不产生；出现则重试 upload） |
+| `300400007`（003004007） | 替换目标不存在 | `--replace` 指向的槽位本无包：去掉 `--replace` 按新增补包重试 |
 | OSS `AccessDenied` 等 | 直传被拒 | 检查 STS 凭证时效与对象键；持续失败联系平台方 |
 
 ## 12. 边界与异常
@@ -197,12 +198,13 @@ sequenceDiagram
 3. **publish 即对外生效**：K4 确认门是 skill 的流程约定（agent 指令层），服务端无二次确认——CI 全自动场景由用户显式授权跳过
 4. **非直传平台**：`ios` 仅元信息登记（sha256 全零占位、无 objectKey）、`web` 无包记录——SKILL.md 指导 agent 跳过 upload 直接登记 / 仅建版本
 5. **多包版本**：一次发版 N 平台包逐个 upload；中断可续（draft 状态可反复增删包），完成后再 publish
-6. **并发发版**：同账号多处并发操作同一 draft 由服务端唯一约束与状态机兜底（槽位冲突 003004002 / 状态机 003003004），skill 不做本地锁
+6. **发布后平台包维护**：published 下可补新平台包（槽位空闲）、`--replace` 换包、`remove-package` 撤回某平台分发；offline 版本一律拒绝（重新分发须新建版本）。**替换 / 删除不推动已安装客户端**（版本号未变，客户端按 semver 判断无更新），要修复存量用户必须发新版本——skill 须在动作前后明确告知
+7. **并发发版**：同账号多处并发操作同一 draft 由服务端唯一约束与状态机兜底（槽位冲突 003004002 / 状态机 003003004），skill 不做本地锁
 
 ## 13. 验收标准
 
 1. `skills/apphub-release/` 交付完整（SKILL.md + scripts/apphub.mjs），拷贝即安装、零依赖可运行
-2. 本地平台真机冒烟全闭环（真实 OSS）：`status` 自检 → 建测试应用 → `create-version`（含 draft 复用幂等分支）→ `upload`（sha256 / sha512 落库正确、blockmap 直传成功）→ `publish` → `verify` 断言通过 → `update-version` → `offline` → 清理测试数据（版本下线后删应用）
+2. 本地平台真机冒烟全闭环（真实 OSS）：`status` 自检 → 建测试应用 → `create-version`（含 draft 复用幂等分支）→ `upload`（sha256 / sha512 落库正确、blockmap 直传成功）→ `publish` → `verify` 断言通过 → `update-version` → **published 下补包 / `--replace` 换包 / `remove-package` 撤包** → `offline` → 清理测试数据（版本下线后删应用）
 3. 错误路径抽验：未配签名密钥调写接口 401、重复版本号、槽位重复——错误码与 §11 处置一致
 4. `pnpm check` 全绿（skill 目录不参与 lint / workspace，需验证不破坏现有门禁）
 5. 接入手册 README 选册导航与 docs/README.md 索引挂接本设计文档

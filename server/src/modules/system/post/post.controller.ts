@@ -7,14 +7,14 @@
 import { Body, Controller, Delete, Get, Param, Post, Put, Query } from '@nestjs/common'
 import { ApiOperation, ApiTags } from '@nestjs/swagger'
 
+import { PostCreateDto, PostPageDto, PostUpdateDto } from './dto/post.dto'
+import type { PostVo } from './dto/post.dto'
+import { PostService } from './post.service'
 import { OperateLog } from '../../../common/decorators/operate-log.decorator'
 import type { PageResult } from '../../../common/interfaces/page-result.interface'
 import { RequirePermissions, SYSTEM_PERMISSION_CODES } from '../permissions'
 // 注意：作为 @Query()/@Body() 元类型的 DTO 类必须值导入（import type 会在运行时擦除，
 // design:paramtypes 退化为 Object，ValidationPipe 的 whitelist 将拒绝全部字段）
-import { PostCreateDto, PostPageDto, PostUpdateDto } from './dto/post.dto'
-import type { PostVo } from './dto/post.dto'
-import { PostService } from './post.service'
 
 @ApiTags('系统岗位')
 @Controller('system/post')

@@ -10,11 +10,11 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger'
 
 import { MemberPageDto } from './dto/member.dto'
 import type { MemberDetailVo, MemberVo, ResetPasswordVo } from './dto/member.dto'
+import { MemberAdminService } from './member-admin.service'
 import { OperateLog } from '../../../common/decorators/operate-log.decorator'
 import type { PageResult } from '../../../common/interfaces/page-result.interface'
 import { RequirePermissions } from '../../system/permissions'
 import { MEMBER_PERMISSION_CODES } from '../permissions'
-import { MemberAdminService } from './member-admin.service'
 
 @ApiTags('终端用户管理')
 @Controller('member')

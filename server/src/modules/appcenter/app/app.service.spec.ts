@@ -42,9 +42,16 @@ function matchWhere(row: unknown, where: Record<string, unknown> | Record<string
   return conditions.some(condition => matches(row, condition))
 }
 
-function makeService(options: { apps?: AppRow[], publishedCount?: number, scopeAppIds?: string[] | null } = {}) {
+function makeService(options: {
+  apps?: AppRow[]
+  publishedCount?: number
+  scopeAppIds?: string[] | null
+  /** 图标对象键 → 体积（HeadObject 校验的数据面） */
+  iconHeads?: Record<string, number>
+} = {}) {
   const apps: AppRow[] = (options.apps ?? []).map(row => ({ ...row }))
   const savedChannels: ChannelRow[] = []
+  const deletedObjectKeys: string[] = []
   let softRemovedCount = 0
   // 事务桩：getRepository 按实体名分流，save 记录写入行（预置 stable 通道契约的观测点）
   const manager = {
@@ -88,8 +95,35 @@ function makeService(options: { apps?: AppRow[], publishedCount?: number, scopeA
     getListAppIds: () => Promise.resolve(options.scopeAppIds === undefined ? null : options.scopeAppIds),
     assertAppAllowed,
   }
-  const service = new AppService(appRepository as never, versionRepository as never, appScopeService as never)
-  return { service, savedChannels, assertAppAllowed, getSoftRemovedCount: () => softRemovedCount }
+  // 存储桩：图标凭证签发 / HeadObject 校验 / 旧对象清理与签名预览的观测点
+  const iconHeads = options.iconHeads ?? {}
+  const storageService = {
+    isConfigured: () => true,
+    issueIconUploadCredential: (objectKey: string) =>
+      Promise.resolve({
+        region: 'oss-cn-hangzhou',
+        bucket: 'apphub-test',
+        objectKey,
+        accessKeyId: 'sts-ak',
+        accessKeySecret: 'sts-sk',
+        securityToken: 'sts-token',
+        expiration: '2026-10-23T11:00:00Z',
+      }),
+    headObject: (objectKey: string) =>
+      Promise.resolve(objectKey in iconHeads ? { contentLength: iconHeads[objectKey] } : null),
+    deleteObject: (objectKey: string) => {
+      deletedObjectKeys.push(objectKey)
+      return Promise.resolve()
+    },
+    signGetUrl: (objectKey: string) => `https://oss.example.com/${objectKey}?Signature=test`,
+  }
+  const service = new AppService(
+    appRepository as never,
+    versionRepository as never,
+    appScopeService as never,
+    storageService as never,
+  )
+  return { service, savedChannels, assertAppAllowed, deletedObjectKeys, getSoftRemovedCount: () => softRemovedCount }
 }
 
 /** 用例通用调用者 id */
@@ -105,7 +139,7 @@ describe('AppService', () => {
 
   it('按 AppKey 查应用时空值应短路返回 null 且不触达仓储（缺 X-App-Key 不得退化为任意行）', async () => {
     const findOne = jest.fn()
-    const service = new AppService({ findOne } as never, {} as never, {} as never)
+    const service = new AppService({ findOne } as never, {} as never, {} as never, {} as never)
     // 运行时缺 X-App-Key 头时 @Headers 装饰器注入 undefined（类型断言模拟该运行时形态）
     await expect(service.findByAppKey(undefined as unknown as string)).resolves.toBeNull()
     await expect(service.findByAppKey('')).resolves.toBeNull()
@@ -216,5 +250,80 @@ describe('AppService', () => {
     })
     await service.get('a1', USER_ID)
     expect(assertAppAllowed).toHaveBeenCalledWith(USER_ID, 'a1', 'appcenter')
+  })
+})
+
+describe('AppService 应用图标（应用图标上传设计）', () => {
+  const APP_ROW = (iconUrl: string | null): AppRow => ({
+    id: 'a1',
+    appKey: 'ah_demo',
+    name: '演示',
+    appType: [],
+    clientType: 'public',
+    iconUrl,
+    status: 'enabled',
+    sort: 0,
+  })
+
+  it('签发图标凭证应生成 icons/ 前缀对象键并归一扩展名（前端不自由拼键）', async () => {
+    const { service } = makeService()
+    const token = await service.issueIconUploadToken({ fileName: 'Logo.PNG' })
+    expect(token.objectKey).toMatch(/^icons\/\d{8}\/[0-9a-f-]{36}\.png$/)
+  })
+
+  it('未上传完成的对象键保存应抛 003001006（HeadObject 兜底）', async () => {
+    const { service } = makeService()
+    await expect(
+      service.create({ ...CREATE_DTO, iconUrl: 'icons/20261023/missing.png' }),
+    ).rejects.toMatchObject({ code: AppcenterErrorCode.ICON_OBJECT_NOT_EXISTS.code })
+  })
+
+  it('超过 2MB 的图标对象应抛 003001007', async () => {
+    const key = 'icons/20261023/big.png'
+    const { service } = makeService({ iconHeads: { [key]: 2 * 1024 * 1024 + 1 } })
+    await expect(
+      service.create({ ...CREATE_DTO, iconUrl: key }),
+    ).rejects.toMatchObject({ code: AppcenterErrorCode.ICON_TOO_LARGE.code })
+  })
+
+  it('已上传对象键应原样落库，出参另签发 2h 预览地址（iconUrl 仍可用于回填）', async () => {
+    const key = 'icons/20261023/ok.png'
+    const { service } = makeService({ apps: [APP_ROW(key)] })
+    const vo = await service.get('a1', USER_ID)
+    expect(vo.iconUrl).toBe(key)
+    expect(vo.iconPreviewUrl).toBe(`https://oss.example.com/${key}?Signature=test`)
+  })
+
+  it('历史 http(s) 地址应原样作为预览且不参与对象校验 / 清理（无归属对象）', async () => {
+    const { service, deletedObjectKeys } = makeService({
+      apps: [APP_ROW('https://cdn.example.com/logo.png')],
+    })
+    const vo = await service.get('a1', USER_ID)
+    expect(vo.iconPreviewUrl).toBe('https://cdn.example.com/logo.png')
+    await service.update(
+      { id: 'a1', name: '演示', appType: ['desktop'], iconUrl: 'https://cdn.example.com/logo.png' },
+      USER_ID,
+    )
+    expect(deletedObjectKeys).toHaveLength(0)
+  })
+
+  it('编辑替换图标应清理旧对象，删除应用应清理当前对象（IC7）', async () => {
+    const oldKey = 'icons/20261023/old.png'
+    const newKey = 'icons/20261023/new.png'
+    const { service, deletedObjectKeys } = makeService({
+      iconHeads: { [newKey]: 1024 },
+      apps: [APP_ROW(oldKey)],
+    })
+    await service.update({ id: 'a1', name: '演示', appType: ['desktop'], iconUrl: newKey }, USER_ID)
+    expect(deletedObjectKeys).toEqual([oldKey])
+    await service.remove('a1', USER_ID)
+    expect(deletedObjectKeys).toEqual([oldKey, newKey])
+  })
+
+  it('非对象键且非 http(s) 的图标地址应被拒绝（防止脏值入库）', async () => {
+    const { service } = makeService()
+    await expect(
+      service.create({ ...CREATE_DTO, iconUrl: 'logo.png' }),
+    ).rejects.toMatchObject({ code: AppcenterErrorCode.ICON_INVALID_ADDRESS.code })
   })
 })

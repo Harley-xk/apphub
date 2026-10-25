@@ -17,8 +17,8 @@ import { APPCENTER_PERMISSION_CODES } from '../permissions'
 // 注意：作为 @Query()/@Body() 元类型的 DTO 类必须值导入（import type 会在运行时擦除，
 // design:paramtypes 退化为 Object，ValidationPipe 的 whitelist 将拒绝全部字段）
 import { AppService } from './app.service'
-import { AppCreateDto, AppOptionsDto, AppPageDto, AppStatusDto, AppUpdateDto } from './dto/app.dto'
-import type { AppCredentialVo, AppVo } from './dto/app.dto'
+import { AppCreateDto, AppOptionsDto, AppPageDto, AppStatusDto, AppUpdateDto, IconUploadTokenDto } from './dto/app.dto'
+import type { AppCredentialVo, AppVo, IconUploadTokenVo } from './dto/app.dto'
 
 @ApiTags('应用管理')
 @Controller('appcenter/app')
@@ -38,6 +38,13 @@ export class AppController {
   @Get('options')
   async listOptions(@Query() dto: AppOptionsDto, @CurrentUser() user: AuthUser): Promise<AppOptionVo[]> {
     return this.appService.listOptions(dto, user.id)
+  }
+
+  @ApiOperation({ summary: '签发应用图标直传凭证（对象键后端生成，仅支持 png / jpg / jpeg / webp）' })
+  @RequirePermissions(APPCENTER_PERMISSION_CODES.APP_CREATE, APPCENTER_PERMISSION_CODES.APP_UPDATE)
+  @Post('icon/upload-token')
+  async issueIconUploadToken(@Body() dto: IconUploadTokenDto): Promise<IconUploadTokenVo> {
+    return this.appService.issueIconUploadToken(dto)
   }
 
   @ApiOperation({ summary: '应用详情（不含 Secret）' })

@@ -18,7 +18,10 @@ export interface AppVO {
   clientType: string
   /** 技术框架：electron / tauri / custom */
   framework: string | null
+  /** 图标原值（OSS 对象键或历史外部地址），编辑回填与提交用 */
   iconUrl: string | null
+  /** 图标展示地址（后端签名 URL，2h；历史外部地址原样），不可用时为 null */
+  iconPreviewUrl: string | null
   description: string | null
   /** 状态：enabled / disabled（停用后开放 API 全部拒绝） */
   status: string
@@ -62,6 +65,18 @@ export interface AppUpdateData {
   sort?: number
 }
 
+/** 图标直传凭证（后端 IconUploadTokenVo：对象键由后端生成下发，前端不自由拼键） */
+export interface IconUploadTokenVO {
+  region: string
+  bucket: string
+  objectKey: string
+  accessKeyId: string
+  accessKeySecret: string
+  securityToken: string
+  /** 凭证过期时刻（ISO 字符串，时效 1h） */
+  expiration: string
+}
+
 /** 应用分页查询条件 */
 export interface AppPageParam extends Partial<PageParam> {
   name?: string
@@ -91,6 +106,12 @@ export async function getApp(id: string): Promise<AppVO> {
 /** 按需查看完整凭证（列表 AppSecret 列恒为 ****，点击时经此拉取；后端记操作日志） */
 export async function getAppSecret(id: string): Promise<AppCredentialVO> {
   const { data } = await http.get<AppCredentialVO>(`/appcenter/app/${id}/secret`)
+  return data!
+}
+
+/** 签发图标直传凭证（扩展名白名单后端校验，对象键后端生成） */
+export async function issueIconUploadToken(fileName: string): Promise<IconUploadTokenVO> {
+  const { data } = await http.post<IconUploadTokenVO>('/appcenter/app/icon/upload-token', { fileName })
   return data!
 }
 

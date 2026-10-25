@@ -2,12 +2,19 @@
  * 作者: Harley-xk
  * 创建: 2026-10-16
  *
- * 描述: 安装包直传组合式工具：文件流式哈希（sha256 hex / sha512 base64）+ STS 凭证 OSS 直传（ali-oss 动态加载）
+ * 描述: OSS 直传组合式工具（安装包与应用图标共用）：文件流式哈希（sha256 hex / sha512 base64）+ STS 凭证直传（ali-oss 动态加载）
  */
 import { sha256 as sha256Hash, sha512 as sha512Hash } from '@noble/hashes/sha2.js'
 import { bytesToHex } from '@noble/hashes/utils.js'
 
-import type { UploadTokenVO } from '@/api/appcenter/package'
+/** OSS 直传所需的最小凭证字段（安装包 UploadTokenVO 与图标 IconUploadTokenVO 均满足） */
+export interface OssUploadCredential {
+  region: string
+  bucket: string
+  accessKeyId: string
+  accessKeySecret: string
+  securityToken: string
+}
 
 /** 文件哈希结果：sha256（hex，登记必填）与 sha512（base64，electron-updater 校验用） */
 export interface FileHash {
@@ -41,7 +48,7 @@ export async function hashFile(file: File): Promise<FileHash> {
  * STS 凭证直传单文件到 OSS（凭证 1h 时效覆盖单次上传；更大文件的断点续传由
  * 应用侧下载链路承担，管理端上传场景不引入分片续传复杂度）
  */
-export async function putObject(credential: UploadTokenVO, objectKey: string, file: File): Promise<void> {
+export async function putObject(credential: OssUploadCredential, objectKey: string, file: File): Promise<void> {
   // ali-oss 体积大，动态 import 仅在上传时加载
   const OSSModule = await import('ali-oss')
   const client = new OSSModule.default({

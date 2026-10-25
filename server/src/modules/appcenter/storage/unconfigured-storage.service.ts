@@ -6,7 +6,7 @@
  */
 import { businessError } from '../../../common/exceptions/business-error'
 import { AppcenterErrorCode } from '../error-codes'
-import type { ObjectHead, StorageService, UploadCredentialVo } from './storage.service'
+import type { IconUploadCredentialVo, ObjectHead, StorageService, UploadCredentialVo } from './storage.service'
 
 export class UnconfiguredStorageService implements StorageService {
   isConfigured(): boolean {
@@ -15,6 +15,10 @@ export class UnconfiguredStorageService implements StorageService {
 
   issueUploadCredential(input: { objectKey: string, blockmapObjectKey: string }): Promise<UploadCredentialVo> {
     return Promise.reject(this.buildError(`无法签发对象 ${input.objectKey} 的直传凭证`))
+  }
+
+  issueIconUploadCredential(objectKey: string): Promise<IconUploadCredentialVo> {
+    return Promise.reject(this.buildError(`无法签发图标对象 ${objectKey} 的直传凭证`))
   }
 
   headObject(objectKey: string): Promise<ObjectHead | null> {

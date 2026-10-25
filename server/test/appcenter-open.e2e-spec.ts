@@ -98,6 +98,7 @@ function makeMemoryRepo<T>(rows: Partial<T>[]) {
 const storageStub: StorageService = {
   isConfigured: () => true,
   issueUploadCredential: () => Promise.reject(new Error('开放链路不签发上传凭证')),
+  issueIconUploadCredential: () => Promise.reject(new Error('开放链路不签发上传凭证')),
   headObject: () => Promise.reject(new Error('开放链路不读取对象头')),
   deleteObject: () => Promise.reject(new Error('开放链路不删除对象')),
   signGetUrl: (objectKey: string) => `https://apphub-e2e.oss-cn-hangzhou.aliyuncs.com/${objectKey}?Expires=1&Signature=e2e`,

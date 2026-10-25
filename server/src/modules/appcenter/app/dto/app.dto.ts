@@ -15,6 +15,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Matches,
   MaxLength,
   Min,
 } from 'class-validator'
@@ -33,7 +34,10 @@ export interface AppVo {
   appType: string[]
   clientType: string
   framework: string | null
+  /** 图标原值（对象键或历史外部地址），编辑表单回填与提交用 */
   iconUrl: string | null
+  /** 图标展示地址：对象键 → 后端签名 URL（2h）；外部地址 → 原样；未设置 → null */
+  iconPreviewUrl: string | null
   description: string | null
   status: string
   sort: number
@@ -45,6 +49,27 @@ export interface AppCredentialVo {
   id: string
   appKey: string
   appSecret: string
+}
+
+/** 图标直传凭证出参（对象键后端生成下发，见应用图标上传设计 §5.1） */
+export interface IconUploadTokenVo {
+  region: string
+  bucket: string
+  objectKey: string
+  accessKeyId: string
+  accessKeySecret: string
+  securityToken: string
+  expiration: string
+}
+
+/** 图标直传凭证入参：仅文件名（扩展名参与对象键生成与白名单校验） */
+export class IconUploadTokenDto {
+  @ApiProperty({ description: '图标文件名（扩展名须为 png / jpg / jpeg / webp）', example: 'logo.png' })
+  @IsString()
+  @IsNotEmpty({ message: '缺少图标文件名' })
+  @MaxLength(255)
+  @Matches(/\.(png|jpe?g|webp)$/i, { message: '图标仅支持 png / jpg / jpeg / webp 格式' })
+  fileName: string
 }
 
 /** 应用下拉查询入参（授权弹窗远程搜索与订阅页筛选） */

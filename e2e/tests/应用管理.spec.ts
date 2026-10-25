@@ -109,6 +109,73 @@ test.describe('应用中心', () => {
     await expect(page.locator('.vxe-body--row').filter({ hasText: `${name}改` })).toHaveCount(0)
   })
 
+  test('注册应用：图标选图即直传 OSS，提交表单自动携带对象键', async ({ page }) => {
+    // 直传数据面 mock：真桶依赖 STS_ROLE_ARN 与 RAM 角色 icons/* 授权，当前环境未配
+    const objectKey = 'icons/20261023/e2e-icon.png'
+    await page.route('**/api/appcenter/app/icon/upload-token', async (route) => {
+      await route.fulfill({
+        json: okBody({
+          region: 'oss-cn-hangzhou',
+          bucket: 'e2e-mock-bucket',
+          objectKey,
+          accessKeyId: 'sts-ak',
+          accessKeySecret: 'sts-sk',
+          securityToken: 'sts-token',
+          expiration: new Date(Date.now() + 3600_000).toISOString(),
+        }),
+      })
+    })
+    await page.route('**aliyuncs.com/**', async (route) => {
+      const cors = {
+        'access-control-allow-origin': '*',
+        'access-control-allow-methods': 'PUT, GET, OPTIONS',
+        'access-control-allow-headers': '*',
+      }
+      if (route.request().method() === 'OPTIONS')
+        await route.fulfill({ status: 200, headers: cors, body: '' })
+      else
+        await route.fulfill({ status: 200, headers: { ...cors, etag: '"e2e-icon-etag"' }, body: '' })
+    })
+    // 保存请求只观测不落库：后端保存会对对象键做 HeadObject 校验，mock 直传并未真的写桶
+    let submitted: Record<string, unknown> | null = null
+    await page.route('**/api/appcenter/app', async (route) => {
+      if (route.request().method() !== 'POST') {
+        await route.continue()
+        return
+      }
+      submitted = route.request().postDataJSON() as Record<string, unknown>
+      await route.fulfill({
+        json: okBody({
+          id: '00000000-0000-4000-8000-0000000000e2',
+          appKey: 'ah_e2eicon00000000',
+          appSecret: 'a'.repeat(32),
+        }),
+      })
+    })
+
+    await page.goto('/appcenter/app')
+    await page.getByRole('button', { name: '注册应用' }).click()
+    const dialog = page.locator('.el-dialog').filter({ hasText: '注册应用' })
+    await dialog.getByPlaceholder('应用名称').fill(`图标应用${Date.now() % 100000}`)
+    await dialog.getByText('桌面应用', { exact: true }).click()
+
+    // 选择图片即触发上传，本地 objectURL 即时预览（不依赖列表刷新）
+    await dialog.locator('input[type="file"]').setInputFiles({
+      name: 'icon.png',
+      mimeType: 'image/png',
+      // 1×1 透明 PNG
+      buffer: Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+        'base64',
+      ),
+    })
+    await expect(dialog.locator('.icon-image')).toBeVisible()
+    await expect(page.locator('.el-message').getByText('图标上传成功')).toBeVisible()
+
+    await dialog.getByRole('button', { name: '确定' }).click()
+    await expect.poll(() => submitted?.iconUrl).toBe(objectKey)
+  })
+
   test('版本下钻页：新增草稿 → 安装包直传（mock）→ 包记录呈现 → 清理闭环', async ({ page }) => {
     // 直传数据面页面级 mock：STS 凭证签发 / OSS PUT / 登记回调 / 包列表
     const fileName = `app-setup-${Date.now() % 100000}.exe`

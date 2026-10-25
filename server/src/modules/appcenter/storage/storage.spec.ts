@@ -35,6 +35,9 @@ describe('UnconfiguredStorageService（未配置分支）', () => {
     await expect(storage.issueUploadCredential({ objectKey: 'a', blockmapObjectKey: 'b' })).rejects.toMatchObject({
       code: AppcenterErrorCode.STS_ISSUE_FAILED.code,
     })
+    await expect(storage.issueIconUploadCredential('icons/20261023/a.png')).rejects.toMatchObject({
+      code: AppcenterErrorCode.STS_ISSUE_FAILED.code,
+    })
     await expect(storage.headObject('a')).rejects.toMatchObject({ code: AppcenterErrorCode.STS_ISSUE_FAILED.code })
     await expect(storage.deleteObject('a')).rejects.toMatchObject({ code: AppcenterErrorCode.STS_ISSUE_FAILED.code })
     expect(() => storage.signGetUrl('a')).toThrow('对象存储未配置')
@@ -46,6 +49,9 @@ describe('OssStorageService', () => {
     const service = new OssStorageService({ ...OPTIONS, stsRoleArn: '' })
     await expect(
       service.issueUploadCredential({ objectKey: 'packages/app/stable/1.0.0/a.exe', blockmapObjectKey: 'b.blockmap' }),
+    ).rejects.toMatchObject({ code: AppcenterErrorCode.STS_ISSUE_FAILED.code })
+    await expect(
+      service.issueIconUploadCredential('icons/20261023/a.png'),
     ).rejects.toMatchObject({ code: AppcenterErrorCode.STS_ISSUE_FAILED.code })
   })
 

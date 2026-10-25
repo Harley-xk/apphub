@@ -2,9 +2,9 @@
  * 作者: Harley-xk
  * 创建: 2026-10-16
  *
- * 描述: 应用服务：注册（生成凭证 + 事务预置 stable 通道）、元数据维护、启停、凭证轮换与删除保护
+ * 描述: 应用服务：注册（生成凭证 + 事务预置 stable 通道）、元数据维护、图标直传凭证与保存校验、启停、凭证轮换与删除保护
  */
-import { Injectable } from '@nestjs/common'
+import { Inject, Injectable, Logger } from '@nestjs/common'
 import { InjectRepository } from '@nestjs/typeorm'
 import { In, Like } from 'typeorm'
 import type { FindOptionsWhere, Repository } from 'typeorm'
@@ -14,24 +14,48 @@ import { businessError } from '../../../common/exceptions/business-error'
 import type { PageResult } from '../../../common/interfaces/page-result.interface'
 import type { AppOptionVo } from '../../system/app-scope/app-lookup.port'
 import { AppScopeService } from '../../system/app-scope/app-scope.service'
-import { APP_STATUS, CHANNEL_STATUS, STABLE_CHANNEL_CODE, VERSION_STATUS } from '../appcenter.constants'
+import {
+  APP_STATUS,
+  CHANNEL_STATUS,
+  ICON_MAX_BYTES,
+  ICON_OBJECT_KEY_PREFIX,
+  ICON_PREVIEW_EXPIRES_SECONDS,
+  STABLE_CHANNEL_CODE,
+  VERSION_STATUS,
+  buildIconObjectKey,
+} from '../appcenter.constants'
 import { AppChannelEntity } from '../entities/app-channel.entity'
 import { AppVersionEntity } from '../entities/app-version.entity'
 import { AppEntity } from '../entities/app.entity'
 import { AppcenterErrorCode } from '../error-codes'
-import type { AppCreateDto, AppCredentialVo, AppOptionsDto, AppPageDto, AppUpdateDto, AppVo } from './dto/app.dto'
+import { STORAGE_SERVICE } from '../storage/storage.service'
+import type { StorageService } from '../storage/storage.service'
+import type {
+  AppCreateDto,
+  AppCredentialVo,
+  AppOptionsDto,
+  AppPageDto,
+  AppUpdateDto,
+  AppVo,
+  IconUploadTokenDto,
+  IconUploadTokenVo,
+} from './dto/app.dto'
 
 /** 可选应用下拉的最大返回条数（授权弹窗远程搜索与订阅页筛选，应用数量有限） */
 const APP_OPTIONS_LIMIT = 200
 
 @Injectable()
 export class AppService {
+  private readonly logger = new Logger(AppService.name)
+
   constructor(
     @InjectRepository(AppEntity)
     private readonly appRepository: Repository<AppEntity>,
     @InjectRepository(AppVersionEntity)
     private readonly versionRepository: Repository<AppVersionEntity>,
     private readonly appScopeService: AppScopeService,
+    @Inject(STORAGE_SERVICE)
+    private readonly storageService: StorageService,
   ) {}
 
   /**
@@ -103,9 +127,20 @@ export class AppService {
   }
 
   /**
+   * 签发图标直传凭证：对象键由后端生成（`icons/{yyyyMMdd}/{uuid}.{ext}`），
+   * STS policy 收敛为该精确键（应用图标上传设计 IC2 / IC3）。
+   */
+  async issueIconUploadToken(dto: IconUploadTokenDto): Promise<IconUploadTokenVo> {
+    const objectKey = buildIconObjectKey(dto.fileName)
+    return this.storageService.issueIconUploadCredential(objectKey)
+  }
+
+  /**
    * 注册应用：生成 AppKey / Secret 并在事务内预置 stable 通道（主张 A1），响应携带完整凭证（列表恒为掩码，完整值可随时经 getSecret 查看）。
    */
   async create(dto: AppCreateDto): Promise<AppCredentialVo> {
+    // 图标直传后回传对象键：落库前 HeadObject 兜底校验（存在 + 体积上限），网络调用置于事务外
+    const iconUrl = await this.resolveIconValue(dto.iconUrl)
     const appKey = generateAppKey()
     const appSecret = generateAppSecret()
     const app = await this.appRepository.manager.transaction(async (manager) => {
@@ -117,7 +152,7 @@ export class AppService {
           appType: dto.appType,
           clientType: dto.clientType,
           framework: dto.framework ?? null,
-          iconUrl: dto.iconUrl ?? null,
+          iconUrl,
           description: dto.description ?? null,
           status: APP_STATUS.ENABLED,
           sort: dto.sort ?? 0,
@@ -138,16 +173,20 @@ export class AppService {
     return { id: app.id, appKey: app.appKey, appSecret: app.appSecret }
   }
 
-  /** 编辑应用元数据（凭证与 AppKey 不在此变更） */
+  /** 编辑应用元数据（凭证与 AppKey 不在此变更）；图标被替换或清空时尽力清理旧对象 */
   async update(dto: AppUpdateDto, userId: string): Promise<void> {
     const app = await this.assertAccessible(userId, dto.id)
+    const iconUrl = await this.resolveIconValue(dto.iconUrl)
+    const previousIcon = app.iconUrl
     app.name = dto.name
     app.appType = dto.appType
     app.framework = dto.framework ?? null
-    app.iconUrl = dto.iconUrl ?? null
+    app.iconUrl = iconUrl
     app.description = dto.description ?? null
     app.sort = dto.sort ?? app.sort
     await this.appRepository.save(app)
+    if (previousIcon && previousIcon !== iconUrl)
+      await this.deleteIconObjectQuietly(previousIcon)
   }
 
   /** 启用 / 停用（停用后其开放 API 调用全部拒绝） */
@@ -177,6 +216,8 @@ export class AppService {
       })
     }
     await this.appRepository.softRemove(app)
+    // 软删后清理图标对象：失败仅告警（记录已不可见，对象残留可人工清理）
+    await this.deleteIconObjectQuietly(app.iconUrl)
   }
 
   /** 按 AppKey 查应用（开放 API 有效性校验与限流策略源用；不限状态——停用语义由开放层处理，软删行不可见） */
@@ -195,6 +236,65 @@ export class AppService {
     const app = await this.getExistsApp(appId)
     await this.appScopeService.assertAppAllowed(userId, app.id, 'appcenter')
     return app
+  }
+
+  /**
+   * 图标取值归一（应用图标上传设计 IC4 / IC6）：
+   * - 空 → null；
+   * - `icons/` 对象键 → HeadObject 校验存在与体积上限（RAM policy 无法限制上传体积，保存动作兜底）；
+   * - `http(s)://` 外部地址 → 历史数据兼容，原样保留（无归属对象可校验）；
+   * - 其余取值拒绝（前端已不再产生，防止脏值入库）。
+   */
+  private async resolveIconValue(input: string | undefined): Promise<string | null> {
+    const value = input?.trim() ?? ''
+    if (!value)
+      return null
+    if (value.startsWith(ICON_OBJECT_KEY_PREFIX)) {
+      const head = await this.storageService.headObject(value)
+      if (!head) {
+        throw businessError(AppcenterErrorCode.ICON_OBJECT_NOT_EXISTS.message, {
+          code: AppcenterErrorCode.ICON_OBJECT_NOT_EXISTS,
+        })
+      }
+      if (head.contentLength > ICON_MAX_BYTES) {
+        throw businessError(AppcenterErrorCode.ICON_TOO_LARGE.message, {
+          code: AppcenterErrorCode.ICON_TOO_LARGE,
+        })
+      }
+      return value
+    }
+    if (/^https?:\/\//i.test(value))
+      return value
+    throw businessError('图标地址格式不合法（须为上传后的对象键或 http(s) 地址）', {
+      code: AppcenterErrorCode.ICON_INVALID_ADDRESS,
+    })
+  }
+
+  /** 图标展示地址：对象键 → 签名 URL（2h）；历史外部地址原样；存储未配置等情况返回 null（不影响列表展示） */
+  private buildIconPreviewUrl(iconUrl: string | null): string | null {
+    if (!iconUrl)
+      return null
+    if (iconUrl.startsWith(ICON_OBJECT_KEY_PREFIX)) {
+      try {
+        return this.storageService.signGetUrl(iconUrl, ICON_PREVIEW_EXPIRES_SECONDS)
+      }
+      catch {
+        return null
+      }
+    }
+    return /^https?:\/\//i.test(iconUrl) ? iconUrl : null
+  }
+
+  /** 尽力删除旧图标对象：仅处理本域对象键，失败告警不阻断主流程（IC7） */
+  private async deleteIconObjectQuietly(iconUrl: string | null): Promise<void> {
+    if (!iconUrl?.startsWith(ICON_OBJECT_KEY_PREFIX))
+      return
+    try {
+      await this.storageService.deleteObject(iconUrl)
+    }
+    catch (error) {
+      this.logger.warn(`清理图标对象失败（对象键 ${iconUrl}）：${error instanceof Error ? error.message : String(error)}`)
+    }
   }
 
   /** 按主键查应用：不存在（含已软删）抛 APP_NOT_EXISTS */
@@ -218,6 +318,7 @@ export class AppService {
       clientType: app.clientType,
       framework: app.framework,
       iconUrl: app.iconUrl,
+      iconPreviewUrl: this.buildIconPreviewUrl(app.iconUrl),
       description: app.description,
       status: app.status,
       sort: app.sort,

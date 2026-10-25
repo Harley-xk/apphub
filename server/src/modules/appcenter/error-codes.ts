@@ -27,6 +27,12 @@ export const AppcenterErrorCode = {
    * 码值归 appcenter 模块段（应用管理员与数据范围设计 §7.5），subscription 域复用同码。
    */
   APP_SCOPE_FORBIDDEN: new ErrorCode(300100005, '无权操作该应用'),
+  /** 图标对象不存在（保存应用时 HeadObject 校验失败——尚未上传完成或对象键不符） */
+  ICON_OBJECT_NOT_EXISTS: new ErrorCode(300100006, '图标对象不存在（尚未上传完成或对象键不符）'),
+  /** 图标文件超过大小上限（2MB） */
+  ICON_TOO_LARGE: new ErrorCode(300100007, '图标文件超过大小上限（2MB）'),
+  /** 图标地址格式不合法（既非上传对象键也非 http(s) 外部地址） */
+  ICON_INVALID_ADDRESS: new ErrorCode(300100008, '图标地址格式不合法（须为上传后的对象键或 http(s) 地址）'),
   // ===== 子域 002：通道 =====
   /** 通道不存在 */
   CHANNEL_NOT_EXISTS: new ErrorCode(300200001, '通道不存在'),

@@ -10,7 +10,7 @@ import STS from 'ali-oss/lib/sts'
 
 import { businessError } from '../../../common/exceptions/business-error'
 import { AppcenterErrorCode } from '../error-codes'
-import type { ObjectHead, StorageService, UploadCredentialVo } from './storage.service'
+import type { IconUploadCredentialVo, ObjectHead, StorageService, UploadCredentialVo } from './storage.service'
 
 /** 签名下载 URL 默认时效：2h（自研协议 downloadUrl 与 D24 适配端点 manifest 同口径） */
 const DEFAULT_SIGN_EXPIRES_SECONDS = 2 * 60 * 60
@@ -49,23 +49,32 @@ export class OssStorageService implements StorageService {
   }
 
   async issueUploadCredential(input: { objectKey: string, blockmapObjectKey: string }): Promise<UploadCredentialVo> {
+    // policy 收敛为仅允许 PutObject 到安装包与 blockmap 两个精确对象键
+    const credentials = await this.assumeRoleForObjects([input.objectKey, input.blockmapObjectKey])
+    return { ...credentials, objectKey: input.objectKey, blockmapObjectKey: input.blockmapObjectKey }
+  }
+
+  async issueIconUploadCredential(objectKey: string): Promise<IconUploadCredentialVo> {
+    // 图标单键：policy 同样收敛为精确键（应用图标上传设计 IC1 / IC3）
+    const credentials = await this.assumeRoleForObjects([objectKey])
+    return { ...credentials, objectKey }
+  }
+
+  /** 按对象键集合签发 STS 凭证：policy 仅允许 PutObject 到这些精确键（角色侧授 prefixes，见图标上传设计 §8） */
+  private async assumeRoleForObjects(objectKeys: string[]): Promise<Omit<IconUploadCredentialVo, 'objectKey'>> {
     if (!this.options.stsRoleArn) {
       // RAM 角色未配置：仅直传链路拒绝（签名 URL / 对象管理不受影响）
       throw businessError('STS 直传未配置（缺少 STS_ROLE_ARN），无法签发上传凭证', {
         code: AppcenterErrorCode.STS_ISSUE_FAILED,
       })
     }
-    // policy 收敛为仅允许 PutObject 到安装包与 blockmap 两个精确对象键
     const policy = {
       Version: '1',
       Statement: [
         {
           Effect: 'Allow',
           Action: ['oss:PutObject'],
-          Resource: [
-            `acs:oss:*:*:${this.options.bucket}/${input.objectKey}`,
-            `acs:oss:*:*:${this.options.bucket}/${input.blockmapObjectKey}`,
-          ],
+          Resource: objectKeys.map(key => `acs:oss:*:*:${this.options.bucket}/${key}`),
         },
       ],
     }
@@ -83,8 +92,6 @@ export class OssStorageService implements StorageService {
       return {
         region: this.options.region,
         bucket: this.options.bucket,
-        objectKey: input.objectKey,
-        blockmapObjectKey: input.blockmapObjectKey,
         accessKeyId: credentials.AccessKeyId,
         accessKeySecret: credentials.AccessKeySecret,
         securityToken: credentials.SecurityToken,

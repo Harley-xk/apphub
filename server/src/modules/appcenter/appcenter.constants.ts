@@ -4,6 +4,7 @@
  *
  * 描述: appcenter 模块公共常量：状态 / 平台 / 架构枚举、tauri target 映射、OSS 对象键规范（设计 §2）
  */
+import { randomUUID } from 'node:crypto'
 
 /** 应用状态：停用后其开放 API 调用全部拒绝 */
 export const APP_STATUS = {
@@ -102,4 +103,28 @@ export function buildPackageObjectKey(input: {
 /** blockmap 差分文件放包同目录：`{fileName}.blockmap` */
 export function buildBlockmapFileName(fileName: string): string {
   return `${fileName}.blockmap`
+}
+
+/** 应用图标对象键前缀（RAM 角色策略须授予该前缀 PutObject，见应用图标上传设计 §8） */
+export const ICON_OBJECT_KEY_PREFIX = 'icons/'
+
+/** 图标大小上限 2MB（RAM policy 无法限制上传体积，保存时 HeadObject 兜底校验） */
+export const ICON_MAX_BYTES = 2 * 1024 * 1024
+
+/** 图标扩展名白名单（不收 SVG：可内嵌脚本，签名 URL 直出浏览器存在注入面） */
+export const ICON_ALLOWED_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp'] as const
+
+/** 图标预览签名 URL 时效：2h（与安装包下载同口径，前端刷新列表即重新签发） */
+export const ICON_PREVIEW_EXPIRES_SECONDS = 2 * 60 * 60
+
+/**
+ * 应用图标对象键规范（应用图标上传设计 IC2）：
+ * `icons/{yyyyMMdd}/{uuid}.{ext}`——注册应用时尚无 appKey，故按日期分目录；
+ * 由后端生成下发（前端不自由拼键），STS policy 收敛为该精确键。
+ */
+export function buildIconObjectKey(fileName: string): string {
+  const ext = fileName.slice(fileName.lastIndexOf('.') + 1).toLowerCase()
+  const now = new Date()
+  const day = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`
+  return `${ICON_OBJECT_KEY_PREFIX}${day}/${randomUUID()}.${ext}`
 }

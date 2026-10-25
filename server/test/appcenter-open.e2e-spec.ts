@@ -267,10 +267,11 @@ describe('AppcenterModule 开放 API (e2e)', () => {
     await request(server).get(`/api/update/${APP_D_KEY}/stable/tauri/windows-x86_64/1.0.0`).expect(204)
   })
 
+  // 31 次串行请求在 12 套 e2e 并行启动的负载下会超过默认 5s 超时，显式放宽（单跑约 2.8s）
   it('限流：公开客户端阈值减半（60 → 30，超出 429）', async () => {
     // 独占 appKey（前序用例未触达），第 31 次请求被滑动窗口拒绝
     for (let index = 0; index < 30; index++)
       await check(APP_RATE_KEY, { platform: 'windows' }).expect(200)
     await check(APP_RATE_KEY, { platform: 'windows' }).expect(429)
-  })
+  }, 15_000)
 })

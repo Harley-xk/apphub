@@ -83,8 +83,10 @@
             </el-button>
           </el-tooltip>
         </template>
+        <!-- 技术框架以官方 logo 图标展示（electron / tauri / custom），悬停浮出全称 -->
         <template #framework="{ row }">
-          {{ row.framework ? FRAMEWORK_LABELS[row.framework] ?? row.framework : '-' }}
+          <FrameworkIcon v-if="row.framework" :framework="row.framework" />
+          <span v-else>-</span>
         </template>
         <template #clientType="{ row }">
           <el-tag :type="row.clientType === 'public' ? 'warning' : 'primary'" size="small" effect="plain">
@@ -169,6 +171,7 @@ import { dateTimeFormatter } from '@/utils/format'
 import AppChannelDrawer from '@/views/appcenter/app/components/AppChannelDrawer.vue'
 import AppCredentialDialog from '@/views/appcenter/app/components/AppCredentialDialog.vue'
 import AppSaveDialog from '@/views/appcenter/app/components/AppSaveDialog.vue'
+import FrameworkIcon from '@/views/appcenter/app/components/FrameworkIcon.vue'
 
 // 与路由 name 对齐（keep-alive 缓存键契约）
 defineOptions({ name: 'AppcenterApp' })
@@ -182,19 +185,12 @@ const APP_TYPE_LABELS: Record<string, string> = {
   mobile: '移动',
 }
 
-/** 框架展示映射（electron / tauri / custom） */
-const FRAMEWORK_LABELS: Record<string, string> = {
-  electron: 'Electron',
-  tauri: 'Tauri',
-  custom: '自定义',
-}
-
 /** 列定义（field 即列宽 / 列序持久化标识，设计见 docs/前端/表格组件设计.md） */
 const columns: ApphubTableColumn[] = [
   { field: 'name', title: '应用名称', minWidth: 200, slot: 'name' },
   { field: 'appKey', title: 'AppKey', width: 200, slot: 'appKey' },
   { field: 'appSecret', title: 'AppSecret', width: 120, slot: 'appSecret' },
-  { field: 'framework', title: '技术框架', width: 110, slot: 'framework' },
+  { field: 'framework', title: '技术框架', width: 90, slot: 'framework' },
   { field: 'clientType', title: '调用方类型', width: 120, slot: 'clientType' },
   { field: 'status', title: '状态', width: 80, slot: 'status' },
   { field: 'sort', title: '排序', width: 70 },

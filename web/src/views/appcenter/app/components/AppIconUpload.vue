@@ -2,10 +2,17 @@
   作者: Harley-xk
   创建: 2026-10-23
 
-  描述: 应用图标上传组件：选择图片即经 STS 凭证直传 OSS，v-model 输出对象键；编辑态回显后端签名预览
+  描述: 应用图标上传组件：选择或拖拽图片即经 STS 凭证直传 OSS，v-model 输出对象键；编辑态回显后端签名预览
 -->
 <template>
-  <div class="icon-upload">
+  <div
+    class="icon-upload"
+    :class="{ 'is-dragover': isDragover }"
+    @dragenter="handleDragEnter"
+    @dragover="handleDragOver"
+    @dragleave="handleDragLeave"
+    @drop="handleDrop"
+  >
     <div class="icon-preview" :class="{ 'is-empty': !displayUrl }">
       <img v-if="displayUrl" :src="displayUrl" alt="应用图标" class="icon-image">
       <span v-else class="icon-placeholder">图标</span>
@@ -41,7 +48,7 @@
         </el-button>
       </div>
       <p class="icon-hint">
-        png / jpg / jpeg / webp，≤ 2MB，建议 1:1 比例
+        png / jpg / jpeg / webp，≤ 2MB，建议 1:1 比例，可直接拖拽图片到此处
       </p>
     </div>
   </div>
@@ -66,10 +73,13 @@ const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
 
 const uploadRef = ref<UploadInstance>()
 const uploading = ref(false)
+/** 拖拽悬停深度计数：dragenter / dragleave 会随子元素冒泡成对触发，直接置布尔会导致高亮抖动 */
+const dragDepth = ref(0)
 /** 本次选择的本地预览（objectURL）：上传成功后立即可见，无需等待列表刷新 */
 const localPreview = ref('')
 
 const displayUrl = computed(() => localPreview.value || props.previewUrl || '')
+const isDragover = computed(() => dragDepth.value > 0)
 
 onBeforeUnmount(() => revokeLocalPreview())
 
@@ -84,8 +94,41 @@ async function handleChange(file: UploadFile): Promise<void> {
   const raw = file.raw
   // 不保留内部文件列表：允许重复选择同一文件，也避免 el-upload 自带的列表 UI
   uploadRef.value?.clearFiles()
-  if (!raw)
+  if (raw)
+    await handleFile(raw)
+}
+
+/** 拖拽悬停：仅在可上传时累计高亮深度 */
+function handleDragEnter(): void {
+  if (!uploading.value)
+    dragDepth.value++
+}
+
+/** 必须阻止默认行为，浏览器才会把文件交给 drop 处理器 */
+function handleDragOver(event: DragEvent): void {
+  event.preventDefault()
+}
+
+function handleDragLeave(): void {
+  if (dragDepth.value > 0)
+    dragDepth.value--
+}
+
+function handleDrop(event: DragEvent): void {
+  event.preventDefault()
+  dragDepth.value = 0
+  if (uploading.value)
     return
+  const raw = event.dataTransfer?.files?.[0]
+  if (!raw) {
+    ElMessage.warning('未识别到图片文件，请拖拽本地图片')
+    return
+  }
+  void handleFile(raw)
+}
+
+/** 统一上传入口：选择文件与拖拽落地共用同一链路（校验 → 申请凭证 → 直传 → 回填对象键） */
+async function handleFile(raw: File): Promise<void> {
   const invalid = validateIconFile(raw)
   if (invalid) {
     ElMessage.warning(invalid)
@@ -142,6 +185,13 @@ function handleRemove(): void {
 }
 
 .icon-preview.is-empty {
+  border-style: dashed;
+}
+
+/* 拖拽悬停：预览框主色描边 + 底色提亮，提示可松手落图 */
+.icon-upload.is-dragover .icon-preview {
+  background: var(--apphub-color-primary-bg-light, #d6f0ec);
+  border-color: var(--apphub-color-primary, #2f8f8a);
   border-style: dashed;
 }
 

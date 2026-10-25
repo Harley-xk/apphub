@@ -60,7 +60,8 @@ test.describe('应用中心', () => {
     const row = page.locator('.vxe-body--row').filter({ hasText: name }).first()
     await expect(row).toBeVisible()
     await expect(row.locator('.el-tag--warning')).toHaveText('公开客户端')
-    await expect(row.getByText('Electron')).toBeVisible()
+    // 技术框架以官方 logo 图标展示（而非文字），悬停浮出全称
+    await expect(row.locator('.framework-icon[data-framework="electron"]')).toBeVisible()
 
     // AppSecret 列恒为掩码，点击后按需拉取完整值弹窗展示（与注册时一致）
     await expect(row.locator('.secret-mask')).toHaveText('****')
@@ -174,6 +175,57 @@ test.describe('应用中心', () => {
 
     await dialog.getByRole('button', { name: '确定' }).click()
     await expect.poll(() => submitted?.iconUrl).toBe(objectKey)
+  })
+
+  test('注册应用：拖拽图片到图标区与选图走同一上传链路', async ({ page }) => {
+    const objectKey = 'icons/20261025/e2e-drop.png'
+    let tokenFileName = ''
+    await page.route('**/api/appcenter/app/icon/upload-token', async (route) => {
+      tokenFileName = (route.request().postDataJSON() as { fileName: string }).fileName
+      await route.fulfill({
+        json: okBody({
+          region: 'oss-cn-hangzhou',
+          bucket: 'e2e-mock-bucket',
+          objectKey,
+          accessKeyId: 'sts-ak',
+          accessKeySecret: 'sts-sk',
+          securityToken: 'sts-token',
+          expiration: new Date(Date.now() + 3600_000).toISOString(),
+        }),
+      })
+    })
+    await page.route('**aliyuncs.com/**', async (route) => {
+      const cors = {
+        'access-control-allow-origin': '*',
+        'access-control-allow-methods': 'PUT, GET, OPTIONS',
+        'access-control-allow-headers': '*',
+      }
+      if (route.request().method() === 'OPTIONS')
+        await route.fulfill({ status: 200, headers: cors, body: '' })
+      else
+        await route.fulfill({ status: 200, headers: { ...cors, etag: '"e2e-drop-etag"' }, body: '' })
+    })
+
+    await page.goto('/appcenter/app')
+    await page.getByRole('button', { name: '注册应用' }).click()
+    const dialog = page.locator('.el-dialog').filter({ hasText: '注册应用' })
+    await dialog.getByPlaceholder('应用名称').fill(`拖拽图标应用${Date.now() % 100000}`)
+
+    // 构造带文件项的 DataTransfer 并派发 drop（浏览器内真实拖拽事件语义）
+    const dataTransfer = await page.evaluateHandle((base64: string) => {
+      const bytes = Uint8Array.from(atob(base64), char => char.charCodeAt(0))
+      const transfer = new DataTransfer()
+      transfer.items.add(new File([bytes], 'drop-icon.png', { type: 'image/png' }))
+      return transfer
+    }, 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==')
+    await dialog.locator('.icon-upload').dispatchEvent('drop', { dataTransfer })
+
+    // 拖拽落地后与选图同链路：申请凭证（文件名来自拖入文件）→ 直传 → 本地即时预览
+    await expect.poll(() => tokenFileName).toBe('drop-icon.png')
+    await expect(dialog.locator('.icon-image')).toBeVisible()
+    await expect(page.locator('.el-message').getByText('图标上传成功')).toBeVisible()
+
+    await dialog.getByRole('button', { name: '取消' }).click()
   })
 
   test('版本下钻页：新增草稿 → 安装包直传（mock）→ 包记录呈现 → 清理闭环', async ({ page }) => {

@@ -56,9 +56,6 @@ async function handleLogin(): Promise<void> {
         <h1 class="login-title">
           应用管理平台
         </h1>
-        <p class="login-subtitle">
-          企业级全栈项目框架底座
-        </p>
       </header>
 
       <form class="login-form" @submit.prevent="handleLogin">
@@ -134,12 +131,6 @@ async function handleLogin(): Promise<void> {
   margin: 12px 0 0;
   font-size: 22px;
   color: var(--apphub-text-1);
-}
-
-.login-subtitle {
-  margin: 6px 0 0;
-  font-size: 13px;
-  color: var(--apphub-text-3);
 }
 
 .login-form {

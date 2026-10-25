@@ -55,6 +55,10 @@
       <ApphubTable :columns="columns" :data="tableData" :loading="loading">
         <template #name="{ row }">
           <div class="app-name-cell">
+            <!-- 图标预览地址由后端签名（2h）；加载失败或无图标时回落到名称首字占位 -->
+            <el-avatar :size="32" shape="square" :src="row.iconPreviewUrl ?? undefined" class="app-icon">
+              {{ row.name.slice(0, 1) }}
+            </el-avatar>
             <span>{{ row.name }}</span>
             <span class="app-type-tags">
               <el-tag
@@ -349,6 +353,11 @@ async function handleDelete(app: AppVO): Promise<void> {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.app-icon {
+  flex-shrink: 0;
+  font-size: 13px;
 }
 
 .app-type-tags {

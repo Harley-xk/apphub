@@ -23,6 +23,18 @@ export interface UploadCredentialVo {
   expiration: string
 }
 
+/** 图标直传凭证出参（单对象键，policy 收敛为仅 PutObject 该键，见应用图标上传设计 §5.1） */
+export interface IconUploadCredentialVo {
+  region: string
+  bucket: string
+  objectKey: string
+  accessKeyId: string
+  accessKeySecret: string
+  securityToken: string
+  /** 凭证过期时刻（ISO 字符串，时效 1h） */
+  expiration: string
+}
+
 /** 对象元信息（登记时以服务端侧 content-length 为准落库 file_size） */
 export interface ObjectHead {
   contentLength: number
@@ -34,6 +46,9 @@ export interface StorageService {
 
   /** 签发 STS 直传凭证：policy 仅允许 PutObject 到 objectKey 与 blockmapObjectKey */
   issueUploadCredential(input: { objectKey: string, blockmapObjectKey: string }): Promise<UploadCredentialVo>
+
+  /** 签发图标 STS 直传凭证：policy 仅允许 PutObject 到该图标对象键（应用图标上传设计 IC1 / IC3） */
+  issueIconUploadCredential(objectKey: string): Promise<IconUploadCredentialVo>
 
   /** 查对象元信息：对象不存在返回 null（登记校验据此区分 003400004） */
   headObject(objectKey: string): Promise<ObjectHead | null>

@@ -194,6 +194,16 @@ const storageStub: StorageService = {
       expiration: '2026-10-16T13:00:00Z',
       ...input,
     } satisfies UploadCredentialVo),
+  issueIconUploadCredential: (objectKey: string) =>
+    Promise.resolve({
+      region: 'oss-cn-hangzhou',
+      bucket: 'apphub-e2e',
+      objectKey,
+      accessKeyId: 'sts-ak',
+      accessKeySecret: 'sts-sk',
+      securityToken: 'sts-token',
+      expiration: '2026-10-16T13:00:00Z',
+    }),
   headObject: (objectKey: string) => Promise.resolve(uploadedHeads[objectKey] ?? null),
   deleteObject: (objectKey: string) => {
     deletedObjectKeys.push(objectKey)
@@ -355,6 +365,66 @@ describe('AppcenterModule (e2e)', () => {
       .expect(200)
     const channelsOfApp = (channelList.body as ApiResponse<{ code: string }[]>).data!
     expect(channelsOfApp.map(channel => channel.code)).toContain('stable')
+  })
+
+  it('应用图标：签发 icons/ 前缀直传凭证，保存时 HeadObject 校验存在与体积上限', async () => {
+    // 凭证签发：对象键由后端生成（icons/{yyyyMMdd}/{uuid}.{ext}），前端不自由拼键
+    const tokenRes = await request(server)
+      .post('/api/appcenter/app/icon/upload-token')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ fileName: 'logo.png' })
+      .expect(200)
+    const token = (tokenRes.body as ApiResponse<{ objectKey: string }>).data!
+    expect(token.objectKey).toMatch(/^icons\/\d{8}\/[0-9a-f-]{36}\.png$/)
+
+    // 扩展名白名单：拒收 SVG（可内嵌脚本）
+    await request(server)
+      .post('/api/appcenter/app/icon/upload-token')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ fileName: 'logo.svg' })
+      .expect(400)
+
+    // 未完成上传的对象键：保存被 003001006 拒绝
+    const missing = await request(server)
+      .post('/api/appcenter/app')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: '图标未上传应用', appType: ['desktop'], clientType: 'public', iconUrl: token.objectKey })
+    expect((missing.body as ApiResponse).code).toBe(300100006)
+
+    // 预置对象后创建成功：iconUrl 存对象键，iconPreviewUrl 为后端签名地址
+    uploadedHeads[token.objectKey] = { contentLength: 2048 }
+    const created = await request(server)
+      .post('/api/appcenter/app')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: '图标应用', appType: ['desktop'], clientType: 'public', iconUrl: token.objectKey })
+      .expect(200)
+    const iconAppId = (created.body as ApiResponse<{ id: string }>).data!.id
+    const detail = await request(server)
+      .get(`/api/appcenter/app/${iconAppId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(200)
+    const detailVo = (detail.body as ApiResponse<{ iconUrl: string, iconPreviewUrl: string }>).data!
+    expect(detailVo.iconUrl).toBe(token.objectKey)
+    expect(detailVo.iconPreviewUrl).toContain(token.objectKey)
+
+    // 超过 2MB 的对象：003001007（RAM policy 无法限制上传体积，保存动作兜底）
+    const bigKey = 'icons/20261023/00000000-0000-4000-8000-0000000000ff.png'
+    uploadedHeads[bigKey] = { contentLength: 3 * 1024 * 1024 }
+    const tooLarge = await request(server)
+      .put(`/api/appcenter/app/${iconAppId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ id: iconAppId, name: '图标应用', appType: ['desktop'], iconUrl: bigKey })
+    expect((tooLarge.body as ApiResponse).code).toBe(300100007)
+
+    // 替换图标：旧对象被尽力清理（IC7）
+    const newKey = 'icons/20261023/00000000-0000-4000-8000-0000000000fe.png'
+    uploadedHeads[newKey] = { contentLength: 2048 }
+    await request(server)
+      .put(`/api/appcenter/app/${iconAppId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ id: iconAppId, name: '图标应用', appType: ['desktop'], iconUrl: newKey })
+      .expect(200)
+    expect(deletedObjectKeys).toContain(token.objectKey)
   })
 
   it('应用授权接口：差集写入并回显，未登记应用拒绝（003001001）', async () => {

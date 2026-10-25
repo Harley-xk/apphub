@@ -112,7 +112,7 @@ export default () => ({
     // 后两项 STS 仅直传凭证签发用，缺失时上传凭证接口单独拒绝
     region: process.env.OSS_REGION ?? '',
     bucket: process.env.OSS_BUCKET ?? '',
-    // STS 直传凭证签发用 RAM 角色与会话名（角色策略仅授 packages/* PutObject）
+    // STS 直传凭证签发用 RAM 角色与会话名（角色策略授 packages/* 与 icons/* PutObject）
     stsRoleArn: process.env.STS_ROLE_ARN ?? '',
     stsSessionName: process.env.STS_SESSION_NAME ?? 'apphub-upload',
   },

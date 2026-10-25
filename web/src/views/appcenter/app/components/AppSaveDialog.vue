@@ -46,8 +46,8 @@
           <el-option label="自定义 / 其他" value="custom" />
         </el-select>
       </el-form-item>
-      <el-form-item label="图标地址" prop="iconUrl">
-        <el-input v-model="form.iconUrl" placeholder="应用图标 OSS 地址（可选）" maxlength="512" />
+      <el-form-item label="应用图标">
+        <AppIconUpload v-model="form.iconUrl" :preview-url="form.iconPreviewUrl" />
       </el-form-item>
       <el-form-item label="应用描述" prop="description">
         <el-input
@@ -76,10 +76,11 @@
 
 <script setup lang="ts">
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
-import { reactive, ref } from 'vue'
+import { reactive, ref, watch } from 'vue'
 
 import type { AppCredentialVO, AppVO } from '@/api/appcenter/app'
 import { createApp, updateApp } from '@/api/appcenter/app'
+import AppIconUpload from '@/views/appcenter/app/components/AppIconUpload.vue'
 
 const emit = defineEmits<{ saved: [], created: [credential: AppCredentialVO] }>()
 
@@ -94,8 +95,16 @@ const form = reactive({
   clientType: 'confidential',
   framework: undefined as string | undefined,
   iconUrl: '',
+  /** 图标回显地址（签名 URL，仅用于展示；提交只带 iconUrl 对象键） */
+  iconPreviewUrl: '',
   description: '',
   sort: 0,
+})
+
+// 图标被移除（iconUrl 置空）时同步清掉回显地址，避免组件继续显示旧图
+watch(() => form.iconUrl, (value) => {
+  if (!value)
+    form.iconPreviewUrl = ''
 })
 
 /** 与后端 AppCreateDto 校验对齐（名称必填 + 至少一个形态标签） */
@@ -113,6 +122,7 @@ function open(app?: AppVO): void {
     form.appType = [...app.appType]
     form.clientType = app.clientType
     form.framework = app.framework ?? undefined
+    form.iconPreviewUrl = app.iconPreviewUrl ?? ''
     form.iconUrl = app.iconUrl ?? ''
     form.description = app.description ?? ''
     form.sort = app.sort
@@ -127,6 +137,7 @@ function resetForm(): void {
   form.clientType = 'confidential'
   form.framework = undefined
   form.iconUrl = ''
+  form.iconPreviewUrl = ''
   form.description = ''
   form.sort = 0
 }

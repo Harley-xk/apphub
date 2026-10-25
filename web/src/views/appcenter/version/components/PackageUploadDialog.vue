@@ -142,7 +142,7 @@ import { computed, reactive, ref } from 'vue'
 import type { PackageRegisterData, PackageVO } from '@/api/appcenter/package'
 import { issueUploadToken, registerPackage } from '@/api/appcenter/package'
 import type { VersionVO } from '@/api/appcenter/version'
-import { hashFile, IOS_SHA256_PLACEHOLDER, putObject } from '@/views/appcenter/version/useOssUploader'
+import { hashFile, IOS_SHA256_PLACEHOLDER, putObject } from '@/views/appcenter/useOssUploader'
 
 const emit = defineEmits<{ saved: [] }>()
 

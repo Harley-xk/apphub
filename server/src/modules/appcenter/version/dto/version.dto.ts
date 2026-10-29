@@ -10,6 +10,7 @@ import { IsBoolean, IsIn, IsOptional, IsString, IsUUID, MaxLength } from 'class-
 
 import { PageParamDto } from '../../../../common/dto/page.dto'
 import { VERSION_STATUS } from '../../appcenter.constants'
+import type { PackageTargetVo } from '../../package/package-targets.util'
 
 /** 版本出参（通道信息由服务层二次查询回填） */
 export interface VersionVo {
@@ -22,6 +23,8 @@ export interface VersionVo {
   title: string
   notes: string | null
   forceUpdate: boolean
+  /** 该版本包记录的 (platform, arch) 目标清单（与版本状态无关，设计 §3.7） */
+  packageTargets: PackageTargetVo[]
   status: string
   publishedAt: Date | null
   createTime: Date

@@ -117,16 +117,8 @@ import type { VersionVO } from '@/api/appcenter/version'
 import ApphubTable from '@/components/ApphubTable/index.vue'
 import type { ApphubTableColumn } from '@/components/ApphubTable/types'
 import { dateTimeFormatter } from '@/utils/format'
+import { PLATFORM_LABELS } from '@/views/appcenter/package-platform'
 import PackageUploadDialog from '@/views/appcenter/version/components/PackageUploadDialog.vue'
-
-/** 平台展示映射 */
-const PLATFORM_LABELS: Record<string, string> = {
-  windows: 'Windows',
-  macos: 'macOS',
-  linux: 'Linux',
-  android: 'Android',
-  ios: 'iOS',
-}
 
 const STATUS_LABELS: Record<string, string> = {
   draft: '草稿',

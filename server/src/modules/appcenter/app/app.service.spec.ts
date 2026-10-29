@@ -2,11 +2,15 @@ import { describe, expect, it, jest } from '@jest/globals'
 
 import { AppService } from './app.service'
 import type { AppChannelEntity } from '../entities/app-channel.entity'
+import type { AppPackageEntity } from '../entities/app-package.entity'
+import type { AppVersionEntity } from '../entities/app-version.entity'
 import type { AppEntity } from '../entities/app.entity'
 import { AppcenterErrorCode } from '../error-codes'
 
 type AppRow = Partial<AppEntity> & { id: string }
 type ChannelRow = Partial<AppChannelEntity>
+type VersionRow = Partial<AppVersionEntity> & { id: string }
+type PackageRow = Partial<AppPackageEntity>
 
 const CREATE_DTO = {
   name: '示例桌面应用',
@@ -44,12 +48,16 @@ function matchWhere(row: unknown, where: Record<string, unknown> | Record<string
 
 function makeService(options: {
   apps?: AppRow[]
+  versions?: VersionRow[]
+  packages?: PackageRow[]
   publishedCount?: number
   scopeAppIds?: string[] | null
   /** 图标对象键 → 体积（HeadObject 校验的数据面） */
   iconHeads?: Record<string, number>
 } = {}) {
   const apps: AppRow[] = (options.apps ?? []).map(row => ({ ...row }))
+  const versions: VersionRow[] = (options.versions ?? []).map(row => ({ ...row }))
+  const packages: PackageRow[] = (options.packages ?? []).map(row => ({ ...row }))
   const savedChannels: ChannelRow[] = []
   const deletedObjectKeys: string[] = []
   let softRemovedCount = 0
@@ -88,6 +96,12 @@ function makeService(options: {
   }
   const versionRepository = {
     count: () => Promise.resolve(options.publishedCount ?? 0),
+    find: ({ where }: { where?: Record<string, unknown> }) =>
+      Promise.resolve(versions.filter(version => matches(version, where))),
+  }
+  const packageRepository = {
+    find: ({ where }: { where?: Record<string, unknown> }) =>
+      Promise.resolve(packages.filter(pkg => matches(pkg, where))),
   }
   // 数据范围桩：默认 ALL（null），按用例覆盖为 SCOPED 集合
   const assertAppAllowed = jest.fn(() => Promise.resolve())
@@ -120,6 +134,7 @@ function makeService(options: {
   const service = new AppService(
     appRepository as never,
     versionRepository as never,
+    packageRepository as never,
     appScopeService as never,
     storageService as never,
   )
@@ -139,7 +154,7 @@ describe('AppService', () => {
 
   it('按 AppKey 查应用时空值应短路返回 null 且不触达仓储（缺 X-App-Key 不得退化为任意行）', async () => {
     const findOne = jest.fn()
-    const service = new AppService({ findOne } as never, {} as never, {} as never, {} as never)
+    const service = new AppService({ findOne } as never, {} as never, {} as never, {} as never, {} as never)
     // 运行时缺 X-App-Key 头时 @Headers 装饰器注入 undefined（类型断言模拟该运行时形态）
     await expect(service.findByAppKey(undefined as unknown as string)).resolves.toBeNull()
     await expect(service.findByAppKey('')).resolves.toBeNull()
@@ -228,6 +243,41 @@ describe('AppService', () => {
     const { service } = makeService({ scopeAppIds: [], apps: [{ id: 'a1', name: '任意应用', appType: [], clientType: 'public', status: 'enabled', sort: 0 }] })
     const page = await service.getPage({ pageNo: 1, pageSize: 10 }, USER_ID)
     expect(page).toEqual({ list: [], total: 0 })
+  })
+
+  it('应用列表支持平台应只聚合已发布版本的包（草稿 / 已下线不计入，主张 A6）', async () => {
+    const { service } = makeService({
+      apps: [{ id: 'a1', name: '演示', appType: ['desktop'], clientType: 'public', status: 'enabled', sort: 0 }],
+      versions: [
+        { id: 'v1', appId: 'a1', status: 'published' },
+        { id: 'v2', appId: 'a1', status: 'published' },
+        { id: 'v3', appId: 'a1', status: 'draft' },
+        { id: 'v4', appId: 'a1', status: 'offline' },
+      ],
+      packages: [
+        { versionId: 'v1', platform: 'windows', arch: 'x64' },
+        { versionId: 'v2', platform: 'windows', arch: 'x64' },
+        { versionId: 'v2', platform: 'macos', arch: 'arm64' },
+        { versionId: 'v3', platform: 'linux', arch: 'x64' },
+        { versionId: 'v4', platform: 'android', arch: null },
+      ],
+    })
+    const page = await service.getPage({ pageNo: 1, pageSize: 10 }, USER_ID)
+    // 跨已在发布版本重复的 (windows, x64) 只保留一项；草稿 / 已下线的包不参与应用级聚合
+    expect(page.list[0]?.packageTargets).toEqual([
+      { platform: 'windows', arch: 'x64' },
+      { platform: 'macos', arch: 'arm64' },
+    ])
+  })
+
+  it('应用详情应携带与列表同口径的支持平台（复用聚合路径）', async () => {
+    const { service } = makeService({
+      apps: [{ id: 'a1', name: '演示', appType: ['desktop'], clientType: 'public', status: 'enabled', sort: 0 }],
+      versions: [{ id: 'v1', appId: 'a1', status: 'published' }],
+      packages: [{ versionId: 'v1', platform: 'linux', arch: 'x64' }],
+    })
+    const vo = await service.get('a1', USER_ID)
+    expect(vo.packageTargets).toEqual([{ platform: 'linux', arch: 'x64' }])
   })
 
   it('应用下拉应同时支持名称与 AppKey 匹配且受数据范围收窄', async () => {

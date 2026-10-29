@@ -6,6 +6,14 @@
  */
 import { http } from '@/api/http'
 
+/** 支持平台 / 架构目标项（应用 / 版本列表出参聚合后的成对目标） */
+export interface PackageTargetVO {
+  /** 平台：windows / macos / linux / android / ios */
+  platform: string
+  /** 架构：x64 / arm64 / universal；android / ios 为 null */
+  arch: string | null
+}
+
 /** 包记录（后端 PackageVo，fileSize 数值化出口；时间为毫秒时间戳） */
 export interface PackageVO {
   id: string

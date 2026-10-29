@@ -25,9 +25,12 @@ import {
   buildIconObjectKey,
 } from '../appcenter.constants'
 import { AppChannelEntity } from '../entities/app-channel.entity'
+import { AppPackageEntity } from '../entities/app-package.entity'
 import { AppVersionEntity } from '../entities/app-version.entity'
 import { AppEntity } from '../entities/app.entity'
 import { AppcenterErrorCode } from '../error-codes'
+import { collectPackageTargets } from '../package/package-targets.util'
+import type { PackageTargetVo } from '../package/package-targets.util'
 import { STORAGE_SERVICE } from '../storage/storage.service'
 import type { StorageService } from '../storage/storage.service'
 import type {
@@ -53,6 +56,8 @@ export class AppService {
     private readonly appRepository: Repository<AppEntity>,
     @InjectRepository(AppVersionEntity)
     private readonly versionRepository: Repository<AppVersionEntity>,
+    @InjectRepository(AppPackageEntity)
+    private readonly packageRepository: Repository<AppPackageEntity>,
     private readonly appScopeService: AppScopeService,
     @Inject(STORAGE_SERVICE)
     private readonly storageService: StorageService,
@@ -83,7 +88,8 @@ export class AppService {
       take: dto.pageSize,
       order: { sort: 'ASC', createTime: 'DESC' },
     })
-    return { list: list.map(app => this.toVo(app)), total }
+    const targetMap = await this.loadPackageTargets(list.map(app => app.id))
+    return { list: list.map(app => this.toVo(app, targetMap.get(app.id) ?? [])), total }
   }
 
   /**
@@ -113,7 +119,42 @@ export class AppService {
 
   /** 应用详情（不含 Secret） */
   async get(id: string, userId: string): Promise<AppVo> {
-    return this.toVo(await this.assertAccessible(userId, id))
+    const app = await this.assertAccessible(userId, id)
+    const targets = (await this.loadPackageTargets([app.id])).get(app.id) ?? []
+    return this.toVo(app, targets)
+  }
+
+  /**
+   * 应用级支持平台 / 架构（设计 §3.7 主张 A6）：仅聚合已发布版本的包记录，
+   * 按版本 id 批量查包（两次查询覆盖整页，不做逐应用 N+1）。
+   */
+  private async loadPackageTargets(appIds: string[]): Promise<Map<string, PackageTargetVo[]>> {
+    const result = new Map<string, PackageTargetVo[]>()
+    if (appIds.length === 0)
+      return result
+    const versions = await this.versionRepository.find({
+      where: { appId: In(appIds), status: VERSION_STATUS.PUBLISHED },
+      select: ['id', 'appId'],
+    })
+    if (versions.length === 0)
+      return result
+    const appIdByVersionId = new Map(versions.map(version => [version.id, version.appId]))
+    const packages = await this.packageRepository.find({
+      where: { versionId: In([...appIdByVersionId.keys()]) },
+      select: ['versionId', 'platform', 'arch'],
+    })
+    const packagesByAppId = new Map<string, Pick<AppPackageEntity, 'platform' | 'arch'>[]>()
+    for (const pkg of packages) {
+      const appId = appIdByVersionId.get(pkg.versionId)
+      if (!appId)
+        continue
+      const rows = packagesByAppId.get(appId) ?? []
+      rows.push(pkg)
+      packagesByAppId.set(appId, rows)
+    }
+    for (const [appId, rows] of packagesByAppId)
+      result.set(appId, collectPackageTargets(rows))
+    return result
   }
 
   /**
@@ -308,8 +349,8 @@ export class AppService {
     return app
   }
 
-  /** 实体转出参：白名单映射（Secret 永不出列表 / 详情） */
-  private toVo(app: AppEntity): AppVo {
+  /** 实体转出参：白名单映射（Secret 永不出列表 / 详情；支持平台由调用方聚合后传入） */
+  private toVo(app: AppEntity, packageTargets: PackageTargetVo[]): AppVo {
     return {
       id: app.id,
       appKey: app.appKey,
@@ -317,6 +358,7 @@ export class AppService {
       appType: app.appType,
       clientType: app.clientType,
       framework: app.framework,
+      packageTargets,
       iconUrl: app.iconUrl,
       iconPreviewUrl: this.buildIconPreviewUrl(app.iconUrl),
       description: app.description,

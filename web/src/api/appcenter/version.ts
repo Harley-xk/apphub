@@ -7,6 +7,8 @@
 import type { PageParam, PageResult } from '@/api/http'
 import { http } from '@/api/http'
 
+import type { PackageTargetVO } from './package'
+
 /** 版本信息（后端 VersionVo，通道信息由服务层回填；时间为毫秒时间戳） */
 export interface VersionVO {
   id: string
@@ -19,6 +21,8 @@ export interface VersionVO {
   title: string
   notes: string | null
   forceUpdate: boolean
+  /** 该版本包记录的 (platform, arch) 目标清单（与版本状态无关） */
+  packageTargets: PackageTargetVO[]
   /** 状态机：draft → published → offline（终态） */
   status: string
   publishedAt: number | null

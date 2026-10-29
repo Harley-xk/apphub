@@ -88,6 +88,20 @@
           <FrameworkIcon v-if="row.framework" :framework="row.framework" />
           <span v-else>-</span>
         </template>
+        <!-- 支持平台 / 架构：已发布版本包记录聚合，(platform, arch) 成对展示（设计 §3.7） -->
+        <template #packageTargets="{ row }">
+          <div v-if="row.packageTargets.length" class="package-targets">
+            <el-tag
+              v-for="target in row.packageTargets"
+              :key="`${target.platform}-${target.arch ?? ''}`"
+              size="small"
+              effect="plain"
+            >
+              {{ formatPackageTarget(target) }}
+            </el-tag>
+          </div>
+          <span v-else>-</span>
+        </template>
         <template #clientType="{ row }">
           <el-tag :type="row.clientType === 'public' ? 'warning' : 'primary'" size="small" effect="plain">
             {{ row.clientType === 'public' ? '公开客户端' : '机密客户端' }}
@@ -172,6 +186,7 @@ import AppChannelDrawer from '@/views/appcenter/app/components/AppChannelDrawer.
 import AppCredentialDialog from '@/views/appcenter/app/components/AppCredentialDialog.vue'
 import AppSaveDialog from '@/views/appcenter/app/components/AppSaveDialog.vue'
 import FrameworkIcon from '@/views/appcenter/app/components/FrameworkIcon.vue'
+import { formatPackageTarget } from '@/views/appcenter/package-platform'
 
 // 与路由 name 对齐（keep-alive 缓存键契约）
 defineOptions({ name: 'AppcenterApp' })
@@ -191,6 +206,7 @@ const columns: ApphubTableColumn[] = [
   { field: 'appKey', title: 'AppKey', width: 200, slot: 'appKey' },
   { field: 'appSecret', title: 'AppSecret', width: 120, slot: 'appSecret' },
   { field: 'framework', title: '技术框架', width: 90, slot: 'framework' },
+  { field: 'packageTargets', title: '支持平台', minWidth: 180, slot: 'packageTargets' },
   { field: 'clientType', title: '调用方类型', width: 120, slot: 'clientType' },
   { field: 'status', title: '状态', width: 80, slot: 'status' },
   { field: 'sort', title: '排序', width: 70 },
@@ -358,6 +374,12 @@ async function handleDelete(app: AppVO): Promise<void> {
 
 .app-type-tags {
   display: inline-flex;
+  gap: 4px;
+}
+
+.package-targets {
+  display: flex;
+  flex-wrap: wrap;
   gap: 4px;
 }
 

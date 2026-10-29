@@ -347,3 +347,41 @@ describe('VersionService（更新候选查询）', () => {
     expect(candidate).toBeNull()
   })
 })
+
+describe('VersionService（列表支持平台）', () => {
+  const PUBLISHED: VersionRow = { ...DRAFT, id: 'v2', version: '1.0.0', status: 'published', createTime: new Date('2026-10-01') }
+  const NEXT_DRAFT: VersionRow = { ...DRAFT, id: 'v3', version: '1.1.0', status: 'draft', createTime: new Date('2026-10-02') }
+
+  it('版本行按自身包记录展示支持平台（成对去重 + 稳定排序，与版本状态无关）', async () => {
+    const { service } = makeService({
+      apps: [APP],
+      channels: [CHANNEL],
+      versions: [PUBLISHED, NEXT_DRAFT],
+      packages: [
+        { versionId: 'v2', platform: 'linux', arch: 'x64' },
+        { versionId: 'v2', platform: 'windows', arch: 'x64' },
+        { versionId: 'v2', platform: 'windows', arch: 'x64' },
+        { versionId: 'v2', platform: 'windows', arch: 'arm64' },
+        { versionId: 'v3', platform: 'android', arch: null },
+      ],
+    })
+    const page = await service.getPage('a1', { pageNo: 1, pageSize: 10 }, USER_ID)
+    const targetsByVersion = new Map(page.list.map(vo => [vo.version, vo.packageTargets]))
+    expect(targetsByVersion.get('1.0.0')).toEqual([
+      { platform: 'windows', arch: 'x64' },
+      { platform: 'windows', arch: 'arm64' },
+      { platform: 'linux', arch: 'x64' },
+    ])
+    expect(targetsByVersion.get('1.1.0')).toEqual([{ platform: 'android', arch: null }])
+  })
+
+  it('无包记录的版本支持平台为空数组（前端显示 -）', async () => {
+    const { service } = makeService({
+      apps: [APP],
+      channels: [CHANNEL],
+      versions: [NEXT_DRAFT],
+    })
+    const page = await service.getPage('a1', { pageNo: 1, pageSize: 10 }, USER_ID)
+    expect(page.list[0]?.packageTargets).toEqual([])
+  })
+})

@@ -7,6 +7,8 @@
 import type { PageParam, PageResult } from '@/api/http'
 import { http } from '@/api/http'
 
+import type { PackageTargetVO } from './package'
+
 /** 应用信息（后端 AppVo，不含 Secret；时间为毫秒时间戳） */
 export interface AppVO {
   id: string
@@ -18,6 +20,8 @@ export interface AppVO {
   clientType: string
   /** 技术框架：electron / tauri / custom */
   framework: string | null
+  /** 支持平台 / 架构：已发布版本包记录成对去重的目标清单 */
+  packageTargets: PackageTargetVO[]
   /** 图标原值（OSS 对象键或历史外部地址），编辑回填与提交用 */
   iconUrl: string | null
   /** 图标展示地址（后端签名 URL，2h；历史外部地址原样），不可用时为 null */

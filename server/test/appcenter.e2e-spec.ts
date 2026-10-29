@@ -651,6 +651,29 @@ describe('AppcenterModule (e2e)', () => {
       .set('Authorization', `Bearer ${adminToken}`)
       .expect(200)
 
+    // 列表聚合（设计 §3.7）：版本行带自身包目标；应用行只聚合已发布版本的包
+    const versionPage = await request(server)
+      .get(`/api/appcenter/app/${appId}/version`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(200)
+    const versionRows = (versionPage.body as ApiResponse<PageResult<{
+      version: string
+      packageTargets: { platform: string, arch: string | null }[]
+    }>>).data!.list
+    expect(versionRows.find(row => row.version === '1.3.0')?.packageTargets)
+      .toEqual([{ platform: 'windows', arch: 'x64' }])
+
+    const appPage = await request(server)
+      .get('/api/appcenter/app')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(200)
+    const appRows = (appPage.body as ApiResponse<PageResult<{
+      id: string
+      packageTargets: { platform: string, arch: string | null }[]
+    }>>).data!.list
+    expect(appRows.find(row => row.id === appId)?.packageTargets)
+      .toEqual([{ platform: 'windows', arch: 'x64' }])
+
     // 管理端下载：已发布版本的包也可签发签名 URL（下载不限版本状态）
     const downloadRes = await request(server)
       .get(`/api/appcenter/version/${versionId}/package/${pkgs[0].id}/download-url`)

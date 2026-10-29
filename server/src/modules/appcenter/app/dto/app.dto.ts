@@ -22,6 +22,7 @@ import {
 
 import { PageParamDto } from '../../../../common/dto/page.dto'
 import { APP_FRAMEWORK, APP_STATUS, CLIENT_TYPE } from '../../appcenter.constants'
+import type { PackageTargetVo } from '../../package/package-targets.util'
 
 /** 应用形态标签取值域 */
 export const APP_TYPE_VALUES = ['desktop', 'web', 'mobile'] as const
@@ -34,6 +35,8 @@ export interface AppVo {
   appType: string[]
   clientType: string
   framework: string | null
+  /** 支持平台 / 架构：已发布版本包记录成对去重后的目标清单（设计 §3.7 主张 A6 / A7） */
+  packageTargets: PackageTargetVo[]
   /** 图标原值（对象键或历史外部地址），编辑表单回填与提交用 */
   iconUrl: string | null
   /** 图标展示地址：对象键 → 后端签名 URL（2h）；外部地址 → 原样；未设置 → null */

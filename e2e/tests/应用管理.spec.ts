@@ -403,6 +403,7 @@ test.describe('应用中心', () => {
           list: [{
             id: 'mock-v1', appId: 'mock-app', channelId: 'mock-ch', channelCode: 'stable', channelName: '稳定版',
             version: '1.0.1', title: '已发布版本', notes: null, forceUpdate: false,
+            packageTargets: [{ platform: 'windows', arch: 'x64' }],
             status: 'published', publishedAt: now, createTime: now,
           }],
           total: 1,
@@ -423,6 +424,8 @@ test.describe('应用中心', () => {
     await page.goto('/appcenter/version?appId=mock-app')
     const versionRow = page.locator('.vxe-body--row').filter({ hasText: '1.0.1' }).first()
     await expect(versionRow.locator('.el-tag--success')).toHaveText('已发布')
+    // 支持平台列：按版本包记录成对展示平台 + 架构（设计 §3.7）
+    await expect(versionRow.getByText('Windows x64')).toBeVisible()
 
     // 包抽屉：已发布版本仍显示上传入口，行内提供替换 / 删除
     await clickRowAction(page, versionRow, '安装包')

@@ -20,6 +20,8 @@ import { AppVersionEntity } from '../entities/app-version.entity'
 import { AppEntity } from '../entities/app.entity'
 import { AppcenterErrorCode } from '../error-codes'
 import { assertFrameworkArtifacts } from '../package/package-artifacts.util'
+import { collectPackageTargets } from '../package/package-targets.util'
+import type { PackageTargetVo } from '../package/package-targets.util'
 import { STORAGE_SERVICE } from '../storage/storage.service'
 import type { StorageService } from '../storage/storage.service'
 import type { VersionCreateDto, VersionPageDto, VersionUpdateDto, VersionVo } from './dto/version.dto'
@@ -61,7 +63,8 @@ export class VersionService {
       order: { createTime: 'DESC' },
     })
     const channelMap = await this.loadChannelMap(appId)
-    return { list: list.map(version => this.toVo(version, channelMap)), total }
+    const targetMap = await this.loadPackageTargets(list.map(version => version.id))
+    return { list: list.map(version => this.toVo(version, channelMap, targetMap)), total }
   }
 
   /** 创建 draft 版本：semver 校验 + 通道归属校验 + 通道内查重（含软删历史，设计 §4.6） */
@@ -294,8 +297,35 @@ export class VersionService {
     return new Map(channels.map(channel => [channel.id, channel]))
   }
 
-  /** 实体转出参：白名单映射 + 通道信息回填 */
-  private toVo(version: AppVersionEntity, channelMap: Map<string, AppChannelEntity>): VersionVo {
+  /**
+   * 版本级支持平台 / 架构（设计 §3.7）：按当前页版本 id 批量查包，
+   * 与版本状态无关——草稿 / 已下线版本同样展示自身已上传的产物覆盖。
+   */
+  private async loadPackageTargets(versionIds: string[]): Promise<Map<string, PackageTargetVo[]>> {
+    const result = new Map<string, PackageTargetVo[]>()
+    if (versionIds.length === 0)
+      return result
+    const packages = await this.packageRepository.find({
+      where: { versionId: In(versionIds) },
+      select: ['versionId', 'platform', 'arch'],
+    })
+    const packagesByVersionId = new Map<string, Pick<AppPackageEntity, 'platform' | 'arch'>[]>()
+    for (const pkg of packages) {
+      const rows = packagesByVersionId.get(pkg.versionId) ?? []
+      rows.push(pkg)
+      packagesByVersionId.set(pkg.versionId, rows)
+    }
+    for (const [versionId, rows] of packagesByVersionId)
+      result.set(versionId, collectPackageTargets(rows))
+    return result
+  }
+
+  /** 实体转出参：白名单映射 + 通道信息 / 支持平台回填 */
+  private toVo(
+    version: AppVersionEntity,
+    channelMap: Map<string, AppChannelEntity>,
+    targetMap: Map<string, PackageTargetVo[]>,
+  ): VersionVo {
     const channel = channelMap.get(version.channelId)
     return {
       id: version.id,
@@ -307,6 +337,7 @@ export class VersionService {
       title: version.title,
       notes: version.notes,
       forceUpdate: version.forceUpdate,
+      packageTargets: targetMap.get(version.id) ?? [],
       status: version.status,
       publishedAt: version.publishedAt,
       createTime: version.createTime,

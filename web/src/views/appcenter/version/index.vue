@@ -67,6 +67,20 @@
         <template #channel="{ row }">
           {{ row.channelName }}（{{ row.channelCode }}）
         </template>
+        <!-- 支持平台 / 架构：按该版本自身包记录成对展示（与版本状态无关，设计 §3.7） -->
+        <template #packageTargets="{ row }">
+          <div v-if="row.packageTargets.length" class="package-targets">
+            <el-tag
+              v-for="target in row.packageTargets"
+              :key="`${target.platform}-${target.arch ?? ''}`"
+              size="small"
+              effect="plain"
+            >
+              {{ formatPackageTarget(target) }}
+            </el-tag>
+          </div>
+          <span v-else>-</span>
+        </template>
         <template #status="{ row }">
           <el-tag :type="STATUS_TAG_TYPES[row.status] ?? 'info'" size="small">
             {{ STATUS_LABELS[row.status] ?? row.status }}
@@ -159,6 +173,7 @@ import { deleteVersion, getVersionPage, offlineVersion, publishVersion } from '@
 import ApphubTable from '@/components/ApphubTable/index.vue'
 import type { ApphubTableColumn } from '@/components/ApphubTable/types'
 import { dateTimeFormatter } from '@/utils/format'
+import { formatPackageTarget } from '@/views/appcenter/package-platform'
 import PackagePanelDrawer from '@/views/appcenter/version/components/PackagePanelDrawer.vue'
 import VersionSaveDialog from '@/views/appcenter/version/components/VersionSaveDialog.vue'
 
@@ -191,6 +206,7 @@ const columns: ApphubTableColumn[] = [
   { field: 'version', title: '版本号', width: 130, slot: 'version' },
   { field: 'title', title: '版本标题', minWidth: 180 },
   { field: 'channel', title: '通道', minWidth: 140, slot: 'channel' },
+  { field: 'packageTargets', title: '支持平台', minWidth: 180, slot: 'packageTargets' },
   { field: 'status', title: '状态', width: 90, slot: 'status' },
   { field: 'forceUpdate', title: '强制更新', width: 90, slot: 'forceUpdate' },
   { field: 'publishedAt', title: '发布时间', minWidth: 170, slot: 'publishedAt' },
@@ -360,6 +376,12 @@ async function handleDelete(row: VersionVO): Promise<void> {
 .version-text {
   font-family: ui-monospace, SFMono-Regular, Consolas, 'Courier New', monospace;
   font-weight: 600;
+}
+
+.package-targets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 
 .terminal-text {

@@ -28,6 +28,9 @@
   --apphub-table-stripe-bg: #f6f8fa;
   --apphub-table-stripe-hover-bg: #e8eef5;
 
+  /* 标签栏：主色同色系的极淡染底（页签自身仍为白底，不用纯白 / 纯黑条） */
+  --apphub-tags-bar-bg: #f4fbfa;
+
   /* 文字 */
   --apphub-text-1: #1f2733;
   --apphub-text-2: #5b6878;
@@ -77,6 +80,9 @@ html.dark {
   --apphub-table-header-bg: #22262e;
   --apphub-table-stripe-bg: rgba(255, 255, 255, 0.05);
   --apphub-table-stripe-hover-bg: rgba(255, 255, 255, 0.1);
+
+  /* 标签栏：深底主色微染（比卡片再偏青一档，不是纯黑） */
+  --apphub-tags-bar-bg: #1d3330;
 
   --apphub-text-1: #e7ebf0;
   --apphub-text-2: #a6b0c0;

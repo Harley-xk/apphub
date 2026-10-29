@@ -2,7 +2,7 @@
  * 作者: Harley-xk
  * 创建: 2026-09-28
  *
- * 描述: 多标签栏：白底细边框（上圆角与内容卡片连体），圆角块页签（激活主色浅底），右键菜单批量操作，左右扩展槽
+ * 描述: 多标签栏：主色淡染底 + 细边框（上圆角与内容卡片连体），圆角块页签（白底，激活主色浅底），右键菜单批量操作，左右扩展槽
 -->
 <template>
   <div class="apphub-tags-bar">
@@ -137,14 +137,14 @@ watch(
 </script>
 
 <style scoped>
-/* 标签栏：白底细边框（左右上三边），下边由内容卡片补齐，拼为一张视觉卡片 */
+/* 标签栏：主色微染浅底 + 细边框（左右上三边），下边由内容卡片补齐，拼为一张视觉卡片 */
 .apphub-tags-bar {
   height: var(--apphub-tags-bar-height);
   flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 8px;
-  background: var(--apphub-card-bg);
+  background: var(--apphub-tags-bar-bg);
   border: 1px solid var(--apphub-card-border);
   border-bottom: none;
   border-radius: var(--apphub-radius) var(--apphub-radius) 0 0;
@@ -166,7 +166,7 @@ watch(
   display: none;
 }
 
-/* 页签：圆角浅底块（激活主色浅底 + 主色文字） */
+/* 页签：圆角块（自身白底 / 暗色卡片底，浮在主色淡染的标签栏上；激活主色浅底 + 主色文字） */
 .apphub-tag {
   height: 28px;
   display: inline-flex;
@@ -174,6 +174,7 @@ watch(
   gap: 4px;
   padding: 0 10px;
   border-radius: var(--apphub-radius-small);
+  background: var(--apphub-card-bg);
   font-size: 12px;
   color: var(--apphub-text-2);
   cursor: pointer;

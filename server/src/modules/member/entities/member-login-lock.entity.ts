@@ -10,6 +10,8 @@ import { Column, Entity, Index, PrimaryGeneratedColumn, UpdateDateColumn } from 
 @Entity('member_login_lock')
 // 锁定维度 (app_key, credential_type, identifier) 唯一（主张 I4）
 @Index('uk_member_login_lock_dimension', ['appKey', 'credentialType', 'identifier'], { unique: true })
+// 工作台「被锁定会员」计数（M7 设计 §5.4；本表无软删语义，普通索引）
+@Index('idx_member_login_lock_locked_until', ['lockedUntil'])
 export class MemberLoginLockEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string

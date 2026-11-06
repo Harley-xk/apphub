@@ -11,6 +11,35 @@ import { mockAuthState } from './support/auth'
  * （假 token 又被守卫弹回首页，症状极具迷惑性）
  */
 async function mockPageApi(page: import('@playwright/test').Page): Promise<void> {
+  // 工作台首页（/home）聚合接口：避免假 token 打到真实后端触发 401 整页接管
+  await page.route(
+    url => url.pathname === '/api/dashboard/overview',
+    route => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        code: 0,
+        data: {
+          generatedAt: Date.now(),
+          range: '7d',
+          todos: { expiringSubscriptions: null, pendingOrders: null, lockedMembers: null },
+          metrics: {
+            appTotal: null,
+            appEnabled: null,
+            versionTotal: null,
+            versionPublished: null,
+            memberTotal: null,
+            memberNewInRange: null,
+            subscriptionActive: null,
+            subscriptionExpiringSoon: null,
+            revenueInRange: null,
+          },
+          sparkline: { memberDaily: null, revenueDaily: null },
+          latest: { orders: null, members: null, versions: null },
+        },
+      }),
+    }),
+  )
   await page.route(
     url => url.pathname === '/api/system/dict/list-all-simple',
     route => route.fulfill({
@@ -62,7 +91,7 @@ test.describe('布局门面', () => {
     await expect(page.locator('svg.apphub-logo-mark')).toBeVisible()
     await expect(page.locator('link[rel="icon"]')).toHaveAttribute('href', /favicon\.svg$/)
     // 侧栏菜单（role=menubar 契约）
-    await expect(page.getByRole('menuitem', { name: '首页' })).toBeVisible()
+    await expect(page.getByRole('menuitem', { name: '工作台' })).toBeVisible()
     // 标签栏首页固定签 + 右侧操作
     await expect(tagOf(page, '/home')).toBeVisible()
     await expect(page.locator('.apphub-tags-bar').getByTitle('刷新当前页')).toBeVisible()
@@ -81,7 +110,7 @@ test.describe('布局门面', () => {
     await tagOf(page, '/appcenter/app').hover()
     await tagOf(page, '/appcenter/app').locator('.apphub-tag-close').click()
     await expect(tagOf(page, '/appcenter/app')).toHaveCount(0)
-    await expect(page.getByRole('heading', { name: '应用管理平台' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: '工作台' })).toBeVisible()
   })
 })
 

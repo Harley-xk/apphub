@@ -31,6 +31,7 @@ const DOMAIN_LABELS: Record<string, string> = {
   version: '版本管理',
   member: '会员管理',
   credential: '会员凭证',
+  overview: '运营工作台',
   product: '商品管理',
 }
 

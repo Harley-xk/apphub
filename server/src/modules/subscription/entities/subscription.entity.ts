@@ -11,6 +11,8 @@ import { BaseEntity } from '../../../common/orm/base.entity'
 @Entity('subscription')
 @Index('uk_subscription_member_app', ['memberId', 'appId'], { unique: true, where: 'deleted_at IS NULL' })
 @Index('idx_subscription_app', ['appId'])
+// 工作台有效订阅计数 / 7 天内到期扫描（M7 设计 §5.4；部分索引，软删行不占位）
+@Index('idx_subscription_expire', ['expireAt'], { where: 'deleted_at IS NULL' })
 export class SubscriptionEntity extends BaseEntity {
   /** 会员（逻辑外键 member.id） */
   @Column({ type: 'uuid' })

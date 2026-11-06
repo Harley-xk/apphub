@@ -27,6 +27,7 @@ import { SignatureModule } from './common/signature/signature.module'
 import { AuditSubscriber } from './common/subscribers/audit.subscriber'
 import configuration from './config/configuration'
 import { AppcenterModule } from './modules/appcenter/appcenter.module'
+import { DashboardModule } from './modules/dashboard/dashboard.module'
 import { DemoModule } from './modules/demo/demo.module'
 import { MemberModule } from './modules/member/member.module'
 import { SubscriptionModule } from './modules/subscription/subscription.module'
@@ -84,6 +85,8 @@ import { SystemModule } from './modules/system/system.module'
     SystemModule,
     // 应用中心：应用注册与凭证、版本发布、安装包管理与更新检测开放 API（M1）
     AppcenterModule,
+    // 运营工作台：首页只读聚合概览（待办 / 指标 / sparkline / 最新动态，M7）
+    DashboardModule,
     // 终端用户：会员 / 凭证 / 双令牌、开放 API 认证（M2 密码先行）与管理端接口
     MemberModule,
     // 订阅与支付：计划 / 订单状态机（M3 线下备案，在线渠道 M5）/ 订阅实例顺延与 introspect 真值

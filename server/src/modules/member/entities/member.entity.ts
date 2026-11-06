@@ -10,6 +10,8 @@ import { BaseEntity } from '../../../common/orm/base.entity'
 
 @Entity('member')
 @Index('idx_member_status', ['status'])
+// 工作台区间新增会员 / 会员 sparkline 扫描（M7 设计 §5.4）
+@Index('idx_member_create_time', ['createTime'])
 export class MemberEntity extends BaseEntity {
   /** 昵称（注册未填时自动生成兜底，如「用户a1b2c3」） */
   @Column({ type: 'varchar', length: 64 })

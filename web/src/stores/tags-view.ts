@@ -63,12 +63,12 @@ function resolveTagIcon(matched: readonly MatchedRecord[] | undefined): string |
 }
 
 function homeView(): TagView {
-  // 首页为静态路由（title「首页」），此处不复用路由表以保持 store 与 router 解耦
+  // 首页为静态路由（title「工作台」），此处不复用路由表以保持 store 与 router 解耦
   return {
     fullPath: HOME_PATH,
     path: HOME_PATH,
-    title: '首页',
-    icon: 'home',
+    title: '工作台',
+    icon: 'dashboard',
     name: 'Home',
     query: {},
     affix: true,

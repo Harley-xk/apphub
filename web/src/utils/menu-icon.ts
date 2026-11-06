@@ -16,6 +16,7 @@ import {
   Key,
   Menu,
   Monitor,
+  Odometer,
   OfficeBuilding,
   PriceTag,
   Setting,
@@ -31,6 +32,7 @@ import type { Component } from 'vue'
 /** 语义图标名映射（路由 meta.icon 的取值域；新增菜单时在此登记） */
 const ICON_MAP: Record<string, Component> = {
   home: HomeFilled,
+  dashboard: Odometer,
   system: Setting,
   user: User,
   peoples: UserFilled,

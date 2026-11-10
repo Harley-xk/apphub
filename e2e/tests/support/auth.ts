@@ -5,7 +5,18 @@ import type { Page, APIRequestContext } from '@playwright/test'
 import { expect } from '@playwright/test'
 
 /** 纯前端用例的模拟登录态：token 预置 + get-permission-info 路由 mock（守卫拉取即命中） */
-export async function mockAuthState(page: Page): Promise<void> {
+export async function mockAuthState(
+  page: Page,
+  permissions: string[] = [
+    'dashboard:overview:query',
+    'demo:product:query',
+    'appcenter:app:query',
+    'appcenter:version:query',
+    'member:member:query',
+    'subscription:order:query',
+    'subscription:sub:query',
+  ],
+): Promise<void> {
   await page.addInitScript(() => localStorage.setItem('APPHUB_TOKEN', 'e2e-mock-token'))
   await page.route('**/api/system/auth/get-permission-info', (route) => {
     void route.fulfill({
@@ -16,17 +27,9 @@ export async function mockAuthState(page: Page): Promise<void> {
         data: {
           user: { id: 'u-e2e', username: 'mock', nickname: '模拟用户' },
           roles: ['operator'],
-          // 页面挂 meta.permission 的直链 / 菜单入口须授查询权：工作台（首页路由）、商品页（demo，直链验证载体）
-          // 与应用管理页（菜单导航用例）；工作台块级权限另含应用 / 会员 / 订阅查询，便于纯前端用例断言渲染
-          permissions: [
-            'dashboard:overview:query',
-            'demo:product:query',
-            'appcenter:app:query',
-            'appcenter:version:query',
-            'member:member:query',
-            'subscription:order:query',
-            'subscription:sub:query',
-          ],
+          // 默认授查询权：工作台（首页路由）、商品页（demo，直链验证载体）与应用管理页（菜单导航用例）；
+          // 工作台块级权限另含应用 / 会员 / 订阅查询，便于纯前端用例断言渲染。其余页面按需传入额外权限点
+          permissions,
         },
       }),
     })

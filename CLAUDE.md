@@ -23,7 +23,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **关键约定**：种子账号 admin / admin123（初始口令经参数 `system.user.init-password` → env → admin123 三级兜底；仅见于 README 等开发者文档，登录页不展示，对外部署后应立即在个人中心改密）；**最后超管保护**——禁用 / 删除 / 解绑 `super_admin` 时若目标为唯一启用超管即拒绝（admin 个体不特殊，基本信息与重置密码无条件放行）；**迁移为唯一建表通道**（本地 `.env` 的 `DB_SYNC` 已关，生产强制关闭并告警）；前端端口 **5180**（`strictPort`，避开 Vite 默认 5173 的本机多项目冲突）；`@nestjs/jwt` 锁 **11.x**（12 为 ESM-only，Jest CJS 不兼容）；member JWT 密钥经 `MEMBER_JWT_SECRET` 配置（生产启动 fail-fast 校验非默认值）；短信 / 邮件通道经 `SMS_*` / `MAIL_*` 配置（生产缺配置启动 fail-fast，非生产降级 log 通道）；在线支付渠道经 `WECHAT_PAY_*` / `ALIPAY_*` 配置（PEM 一律文件路径；生产两渠道全未配或部分填写启动 fail-fast，非生产降级 Mock 渠道）。
 
-**验证基线**：`pnpm check` 全绿（server 单测 561 + e2e 135、web 单测 122）、浏览器 e2e 39 用例（工作台 / 登录链路 / 布局与多标签 / 系统管理 / 开发示例 / 个人中心 / 应用中心 / 会员中心 / 订阅管理 / 应用管理员与数据范围）。
+**验证基线**：`pnpm check` 全绿（server 单测 561 + e2e 135、web 单测 122、发版 skill 单测 27）、浏览器 e2e 39 用例（工作台 / 登录链路 / 布局与多标签 / 系统管理 / 开发示例 / 个人中心 / 应用中心 / 会员中心 / 订阅管理 / 应用管理员与数据范围）。
 
 ## 语言约定
 
@@ -53,6 +53,7 @@ apphub：**应用管理平台**——多应用更新检测、用户统一认证�
 | `pnpm dev:server` / `pnpm dev:web` | 单独启动后端（watch 模式）/ 前端 |
 | `pnpm build` | 构建前后端 |
 | `pnpm test` | 前后端单元测试（server Jest / web Vitest） |
+| `pnpm test:skill` | 发版 skill 单元测试（node:test，覆盖 OSS 分片传输模块） |
 | `pnpm --filter server test -- app.controller` | 运行单个测试（按名称匹配测试文件） |
 | `pnpm test:e2e` | 后端 e2e 测试（无需真实数据库，DataSource 已打桩） |
 | `pnpm test:e2e:web` | 浏览器端到端测试（Playwright，条件双 webServer 自动拉起前后端、复用本机 Chrome/Edge；无库环境自动回退为仅前端，全链路用例跳过；`E2E_BROWSER=msedge` 可切 Edge） |

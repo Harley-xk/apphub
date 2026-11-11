@@ -1,6 +1,6 @@
 ---
 name: apphub-release
-description: 应用发版助手：向 apphub 应用管理平台发布新版本——自动打包、上传安装包（STS 直传 OSS）、创建/发布/验证版本、维护版本信息（更新说明、强制标记、下线），以及已发布版本补包 / 换包 / 撤回平台包；支持从平台自检并更新技能本体。当用户要求发版、发布新版本、上传安装包、补传平台包、替换已发布包、更新版本信息、下线版本、检查/更新发版技能，或首次接入 apphub 平台发版时使用。
+description: 应用发版助手：向 apphub 应用管理平台发布新版本——自动打包、上传安装包（STS 直传 OSS，大文件自动分片）、创建/发布/验证版本、维护版本信息（更新说明、强制标记、下线），以及已发布版本补包 / 换包 / 撤回平台包；支持从平台自检并更新技能本体。当用户要求发版、发布新版本、上传安装包、补传平台包、替换已发布包、更新版本信息、下线版本、检查/更新发版技能，或首次接入 apphub 平台发版时使用。
 ---
 
 # apphub 发版助手
@@ -47,6 +47,7 @@ description: 应用发版助手：向 apphub 应用管理平台发布新版本�
 5. **建草稿版本**：`node scripts/apphub.mjs create-version --version {版本} --title {标题} --notes {说明}`（强制更新加 `--force`）。同版本已有草稿会自动复用，属正常续作场景。
 6. **逐平台上传**：对每个平台执行
    `node scripts/apphub.mjs upload --version {版本} --platform {平台} --arch {架构} --file {安装包路径} [--blockmap {blockmap}] [--sig-file {签名文件}]`
+   - **大文件自动分片**：默认 `--multipart auto`——安装包与 blockmap 各自独立判断，严格超过阈值（默认 64 MiB）走 OSS multipart（默认 16 MiB × 并发 4、分片级重试 3 次、单分片 90s 无进展超时），小文件仍单次 PUT；细则见 §1.1
    - electron 项目建议传 `--blockmap`（客户端获得差分更新）
    - tauri 项目必须传 `--sig-file`（发布前置校验强制 minisign 签名）
    - 已发布版本的补包 / 换包 / 撤包不重走发布流程，操作见 §3
@@ -55,6 +56,24 @@ description: 应用发版助手：向 apphub 应用管理平台发布新版本�
    **例外**：用户已明示「全自动 / 不要确认 / CI 模式」时跳过此门。
 8. **验证**：`node scripts/apphub.mjs verify --expect {版本} --platform {平台} [--arch {架构}] [--current {任一旧版本}]`，通过即闭环；失败按 §5 排查。
 9. **汇报**：发布完成后汇总版本 / 通道 / 包清单 / 验证结果 / 下载链路提示（客户端经更新检测自动获取）。
+
+### 1.1 大文件分片上传（multipart）
+
+`upload` 默认 `--multipart auto`：安装包与 blockmap **各自独立**判断，严格大于阈值才走 OSS multipart，否则保持单次 PUT。分片传输支持固定并发、分片级重试、单分片无进展超时、字节进度 / 速度 / ETA；任一分片、Complete 或 HEAD 大小校验失败都不会登记包记录。
+
+| 参数 | 取值 | 默认 | 说明 |
+| --- | --- | --- | --- |
+| `--multipart` | `auto` / `off` | `auto` | `off` 对整个 upload 命令生效，安装包与 blockmap 全部单次 PUT |
+| `--threshold` | 字节或 `64MiB` | 64 MiB | 严格大于才启用分片；`0` 可强制非空对象走分片 |
+| `--part-size` | 字节或 `16MiB` | 16 MiB | 取值 100 KiB ~ 5 GiB；分片数上限 10000 |
+| `--concurrency` | 正整数 | 4 | 同时进行的 UploadPart 数 |
+| `--retry` | 非负整数 | 3 | 单分片最大重试次数（不含首次尝试） |
+| `--part-timeout` | 毫秒或 `90s` | 90 s | 单分片无进展超时 |
+| `--progress-interval` | 毫秒或 `15s` | 15 s | 无新百分比时的最长静默输出间隔 |
+
+CI 可用环境变量覆盖：`APPHUB_MULTIPART` / `APPHUB_MULTIPART_THRESHOLD_BYTES` / `APPHUB_MULTIPART_PART_SIZE_BYTES` / `APPHUB_MULTIPART_CONCURRENCY` / `APPHUB_MULTIPART_RETRIES` / `APPHUB_MULTIPART_PART_TIMEOUT_MS` / `APPHUB_MULTIPART_PROGRESS_INTERVAL_MS`。优先级为 **CLI 参数 > 环境变量 > 默认值**；空字符串按未设置处理，非法值直接失败，不会静默套用默认值。
+
+失败语义：`auto` 遇到权限、初始化、UploadPart、Complete 或 HEAD 校验错误时直接失败并尽力中止分片会话，**不会自动降级为单次 PUT**；排查后重跑，或显式 `--multipart off` 回退。进度长时间静默通常意味着链路停滞，单分片超时会按 `--retry` 重试；持续失败时可调小 `--concurrency`。
 
 ## 2. 框架适配——产物定位
 
@@ -127,6 +146,9 @@ skill 本体（`SKILL.md` + `scripts/`）由平台随发布包部署，经公开
 | `300400004` | 包对象不存在 | 上传未完成即登记；直接重试 upload |
 | `300400007` | 替换目标不存在 | `--replace` 指向的槽位本无包：去掉 `--replace` 按新增补包重试 |
 | OSS `AccessDenied` | 直传被拒 | 凭证过期（重试会重新签发）或对象键不符；持续失败联系平台方 |
+| multipart 初始化 / 分片 / Complete 失败 | 大文件分片传输失败 | 不登记包记录；`auto` 不自动降级——排查网络 / STS / OSS 后重跑，或显式 `--multipart off` |
+| multipart HEAD 校验 403（警告） | STS 仅具备上传权限 | 属预期：完成依据为「全部分片成功且 Complete 成功」，无需处理 |
+| 分片进度长时间静默 | 网络停滞 / 单分片超时 | 单分片 90s 无进展会终止并按 `--retry` 重试；持续失败检查跨境链路或调小 `--concurrency` |
 | verify 失败 hasUpdate=false | 发布未生效 / 应用或通道停用 | 核对版本状态与通道状态后重验 |
 | self-update 更新源不可达 | manifest 拉取失败 / 404 | 核对 `baseUrl` 与平台是否已发布 skill 产物；`--check` 仅告警，发版可继续用本地版本 |
 | self-update sha256 不匹配 | 下载损坏或源被替换 | 重试一次；持续失败停止更新并报告，勿手工覆盖文件 |
@@ -140,3 +162,4 @@ skill 本体（`SKILL.md` + `scripts/`）由平台随发布包部署，经公开
 4. **替换 / 撤包不推动已安装客户端**：版本号未变时客户端按 semver 判断无更新；不得把「换包」当作修复存量用户的手段而不告知，修复存量必须发新版本
 5. **产物哈希对照不一致即停止**：宁可中断发版，不登记错位产物
 6. **自更新只信平台基址**：只从配置的 `baseUrl`（或线上默认基址）拉取 manifest 与文件，不接受第三方 URL、不手工拼装或覆盖 skill 文件；sha256 不匹配即停止
+7. **大文件失败不登记、不自动降级**：multipart 任一分片 / Complete / HEAD 失败都不得调用包登记；`auto` 失败后不得偷偷改走单次 PUT，重跑须显式选择 `--multipart off`

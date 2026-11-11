@@ -8,7 +8,7 @@
 /** 存储服务注入 token（appcenter 模块内消费） */
 export const STORAGE_SERVICE = 'appcenter:storage-service'
 
-/** STS 直传凭证出参（浏览器 ali-oss 直传私有桶用，policy 收敛为精确键 PutObject） */
+/** STS 直传凭证出参（浏览器 ali-oss / 发版 skill 直传私有桶用，policy 收敛为精确键 PutObject + AbortMultipartUpload） */
 export interface UploadCredentialVo {
   region: string
   bucket: string
@@ -44,7 +44,7 @@ export interface StorageService {
   /** OSS 主配置是否齐全（未配置时启动正常，存储操作统一抛 003400001） */
   isConfigured(): boolean
 
-  /** 签发 STS 直传凭证：policy 仅允许 PutObject 到 objectKey 与 blockmapObjectKey */
+  /** 签发 STS 直传凭证：policy 仅允许 PutObject / AbortMultipartUpload 到 objectKey 与 blockmapObjectKey */
   issueUploadCredential(input: { objectKey: string, blockmapObjectKey: string }): Promise<UploadCredentialVo>
 
   /** 签发图标 STS 直传凭证：policy 仅允许 PutObject 到该图标对象键（应用图标上传设计 IC1 / IC3） */

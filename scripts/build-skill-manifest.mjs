@@ -26,6 +26,9 @@ const { values } = parseArgs({
 
 /** 纳入分发的文件白名单（skill 根下只维护这三类；应用侧配置不进 skill 目录） */
 function isDistributable(rel) {
+  // 源码测试文件仅随仓库演进，分发给应用侧无意义且会污染 manifest
+  if (rel.endsWith('.test.mjs') || rel.endsWith('.spec.mjs'))
+    return false
   return rel === 'SKILL.md' || rel === 'VERSION' || rel.startsWith('scripts/')
 }
 

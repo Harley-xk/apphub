@@ -2,7 +2,7 @@
  * 作者: Harley-xk
  * 创建: 2026-10-16
  *
- * 描述: OSS 存储实现：STS 直传凭证签发（policy 收敛精确键 PutObject）/ HeadObject / 删除 / 签名下载 URL
+ * 描述: OSS 存储实现：STS 直传凭证签发（policy 收敛精确键 PutObject + 安装包 AbortMultipartUpload）/ HeadObject / 删除 / 签名下载 URL
  */
 import { Logger } from '@nestjs/common'
 import OSS from 'ali-oss'
@@ -11,6 +11,11 @@ import STS from 'ali-oss/lib/sts'
 import { businessError } from '../../../common/exceptions/business-error'
 import { AppcenterErrorCode } from '../error-codes'
 import type { IconUploadCredentialVo, ObjectHead, StorageService, UploadCredentialVo } from './storage.service'
+
+/** RAM Action：上传对象（multipart 的 Initiate / UploadPart / Complete 同属 PutObject） */
+const OSS_ACTION_PUT_OBJECT = 'oss:PutObject'
+/** RAM Action：中止分片上传（发版 skill 大文件分片失败时的会话清理） */
+const OSS_ACTION_ABORT_MULTIPART_UPLOAD = 'oss:AbortMultipartUpload'
 
 /** 签名下载 URL 默认时效：2h（自研协议 downloadUrl 与 D24 适配端点 manifest 同口径） */
 const DEFAULT_SIGN_EXPIRES_SECONDS = 2 * 60 * 60
@@ -49,8 +54,11 @@ export class OssStorageService implements StorageService {
   }
 
   async issueUploadCredential(input: { objectKey: string, blockmapObjectKey: string }): Promise<UploadCredentialVo> {
-    // policy 收敛为仅允许 PutObject 到安装包与 blockmap 两个精确对象键
-    const credentials = await this.assumeRoleForObjects([input.objectKey, input.blockmapObjectKey])
+    // policy 收敛为仅允许 PutObject / AbortMultipartUpload 到安装包与 blockmap 两个精确对象键
+    const credentials = await this.assumeRoleForObjects(
+      [input.objectKey, input.blockmapObjectKey],
+      [OSS_ACTION_PUT_OBJECT, OSS_ACTION_ABORT_MULTIPART_UPLOAD],
+    )
     return { ...credentials, objectKey: input.objectKey, blockmapObjectKey: input.blockmapObjectKey }
   }
 
@@ -60,8 +68,11 @@ export class OssStorageService implements StorageService {
     return { ...credentials, objectKey }
   }
 
-  /** 按对象键集合签发 STS 凭证：policy 仅允许 PutObject 到这些精确键（角色侧授 prefixes，见图标上传设计 §8） */
-  private async assumeRoleForObjects(objectKeys: string[]): Promise<Omit<IconUploadCredentialVo, 'objectKey'>> {
+  /** 按对象键集合签发 STS 凭证：policy 仅允许 actions 作用于这些精确键（角色侧授 prefixes，见图标上传设计 §8） */
+  private async assumeRoleForObjects(
+    objectKeys: string[],
+    actions: string[] = [OSS_ACTION_PUT_OBJECT],
+  ): Promise<Omit<IconUploadCredentialVo, 'objectKey'>> {
     if (!this.options.stsRoleArn) {
       // RAM 角色未配置：仅直传链路拒绝（签名 URL / 对象管理不受影响）
       throw businessError('STS 直传未配置（缺少 STS_ROLE_ARN），无法签发上传凭证', {
@@ -73,7 +84,7 @@ export class OssStorageService implements StorageService {
       Statement: [
         {
           Effect: 'Allow',
-          Action: ['oss:PutObject'],
+          Action: actions,
           Resource: objectKeys.map(key => `acs:oss:*:*:${this.options.bucket}/${key}`),
         },
       ],

@@ -10,7 +10,7 @@ import type { RouteRecordRaw } from 'vue-router'
 export const systemRoutes: RouteRecordRaw[] = [
   {
     path: 'system',
-    meta: { title: '系统管理', icon: 'system' },
+    meta: { title: '系统管理', icon: 'system', menuDefaultCollapsed: true },
     redirect: '/system/user',
     children: [
       {

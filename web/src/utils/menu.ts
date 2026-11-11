@@ -16,6 +16,8 @@ export interface MenuNode {
   icon?: string
   /** 子菜单（空数组为叶子节点） */
   children: MenuNode[]
+  /** 分组默认收起（来自 meta.menuDefaultCollapsed，缺省 false 即默认展开） */
+  defaultCollapsed: boolean
 }
 
 /** 权限判定函数形态（auth store 的 hasPermission 子集，菜单层与 store 解耦便于测试） */
@@ -71,7 +73,26 @@ export function buildMenuTree(
       title: toTitle(route),
       icon: typeof icon === 'string' ? icon : undefined,
       children,
+      defaultCollapsed: route.meta?.menuDefaultCollapsed === true,
     })
   }
   return nodes
+}
+
+/**
+ * 默认展开的分组路径（供侧栏 el-menu 的 default-openeds）：有子级且未标记默认收起的节点，
+ * 逐层递归收集；叶子节点本身不是分组，不进结果
+ */
+export function collectDefaultOpened(menus: MenuNode[]): string[] {
+  const paths: string[] = []
+  for (const menu of menus) {
+    if (menu.children.length === 0) {
+      continue
+    }
+    if (!menu.defaultCollapsed) {
+      paths.push(menu.path)
+    }
+    paths.push(...collectDefaultOpened(menu.children))
+  }
+  return paths
 }

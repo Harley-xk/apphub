@@ -50,10 +50,9 @@ async function clickSelectOption(page: Page, text: string): Promise<void> {
 }
 
 test.describe('订阅管理', () => {
-  test('侧栏订阅管理分组展开三页子项', async ({ page }) => {
+  test('侧栏订阅管理分组默认展开三页子项', async ({ page }) => {
     await page.goto('/')
 
-    await page.getByRole('menuitem', { name: '订阅管理' }).click()
     await expect(page.getByRole('menuitem', { name: '订阅计划' })).toBeVisible()
     await expect(page.getByRole('menuitem', { name: '订单管理' })).toBeVisible()
     await expect(page.getByRole('menuitem', { name: '订阅实例' })).toBeVisible()

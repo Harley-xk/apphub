@@ -24,10 +24,9 @@ function okBody<T>(data: T) {
 }
 
 test.describe('应用中心', () => {
-  test('侧栏应用中心分组展开应用管理子项', async ({ page }) => {
+  test('侧栏应用中心分组默认展开应用管理子项', async ({ page }) => {
     await page.goto('/')
 
-    await page.getByRole('menuitem', { name: '应用中心' }).click()
     await expect(page.getByRole('menuitem', { name: '应用管理' })).toBeVisible()
   })
 

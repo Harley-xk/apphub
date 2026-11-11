@@ -26,6 +26,8 @@ declare module 'vue-router' {
     icon?: string
     /** 不进侧栏菜单（隐藏子页，路由仍注册供直链访问） */
     hidden?: boolean
+    /** 侧栏分组默认收起（缺省展开；低频分组如系统管理标注收起，见布局与风格设计 §8） */
+    menuDefaultCollapsed?: boolean
     /** 参与多标签 keep-alive 缓存（页面 defineOptions name 须与路由 name 一致） */
     keepAlive?: boolean
     /** 不落地为页签（刷新中转路由用） */

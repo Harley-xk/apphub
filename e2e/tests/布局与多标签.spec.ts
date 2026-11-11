@@ -113,13 +113,16 @@ test.describe('布局门面', () => {
     const appItem = page.getByRole('menuitem', { name: '应用管理' })
     const userItem = page.getByRole('menuitem', { name: '用户管理' })
 
-    // 依次展开两个分组：互不排他，两个子项同时可见
-    await appGroup.click()
+    // 默认状态：非系统管理分组展开、系统管理分组收起（meta.menuDefaultCollapsed）
+    await expect(appItem).toBeVisible()
+    await expect(userItem).toBeHidden()
+
+    // 展开系统管理后两分组同时可见：互不排他、独立展开
     await systemGroup.click()
     await expect(appItem).toBeVisible()
     await expect(userItem).toBeVisible()
 
-    // 收起其中一个分组，另一分组保持展开
+    // 收起应用中心，系统管理保持展开
     await appGroup.click()
     await expect(appItem).toBeHidden()
     await expect(userItem).toBeVisible()
@@ -128,8 +131,7 @@ test.describe('布局门面', () => {
   test('菜单导航落签，关闭页签回到相邻签', async ({ page }) => {
     await page.goto('/')
 
-    // 展开应用中心目录并进入应用管理
-    await page.getByRole('menuitem', { name: '应用中心' }).click()
+    // 应用中心分组默认展开，直接进入应用管理
     await page.getByRole('menuitem', { name: '应用管理' }).click()
     await expect(page.getByPlaceholder('名称模糊匹配')).toBeVisible()
     await expect(tagOf(page, '/appcenter/app')).toBeVisible()

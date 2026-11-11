@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { RouteRecordRaw } from 'vue-router'
 
-import { buildMenuTree } from '@/utils/menu'
+import { buildMenuTree, collectDefaultOpened } from '@/utils/menu'
 
 
 describe('路由树转菜单树', () => {
@@ -53,6 +53,41 @@ describe('路由树转菜单树', () => {
     const routes = [{ path: 'x' }] as unknown as RouteRecordRaw[]
 
     expect(buildMenuTree(routes)[0].title).toBe('未命名')
+  })
+})
+
+describe('分组默认展开', () => {
+  const routes = [
+    { path: 'home', meta: { title: '工作台' } },
+    {
+      path: 'appcenter',
+      meta: { title: '应用中心' },
+      children: [{ path: 'app', meta: { title: '应用管理' } }],
+    },
+    {
+      path: 'system',
+      meta: { title: '系统管理', menuDefaultCollapsed: true },
+      children: [
+        {
+          path: 'nested',
+          meta: { title: '嵌套分组' },
+          children: [{ path: 'page', meta: { title: '嵌套页' } }],
+        },
+      ],
+    },
+  ] as unknown as RouteRecordRaw[]
+
+  it('未标注默认收起的组展开，标注的组收起；叶子节点不进展开集', () => {
+    const opened = collectDefaultOpened(buildMenuTree(routes))
+
+    // 应用中心默认展开；系统管理折叠但其内部嵌套分组仍按自身标记默认展开
+    expect(opened).toEqual(['/appcenter', '/system/nested'])
+  })
+
+  it('仅有叶子节点的菜单不产生展开项', () => {
+    const leafOnly = [{ path: 'home', meta: { title: '工作台' } }] as unknown as RouteRecordRaw[]
+
+    expect(collectDefaultOpened(buildMenuTree(leafOnly))).toEqual([])
   })
 })
 

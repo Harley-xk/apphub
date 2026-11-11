@@ -37,10 +37,9 @@ function appSignHeaders(appKey: string, appSecret: string, method: string, path:
 }
 
 test.describe('会员中心', () => {
-  test('侧栏会员中心分组展开会员管理子项', async ({ page }) => {
+  test('侧栏会员中心分组默认展开会员管理子项', async ({ page }) => {
     await page.goto('/')
 
-    await page.getByRole('menuitem', { name: '会员中心' }).click()
     await expect(page.getByRole('menuitem', { name: '会员管理' })).toBeVisible()
   })
 

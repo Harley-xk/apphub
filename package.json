@@ -12,9 +12,10 @@
     "dev:web": "pnpm --filter web run dev",
     "build": "pnpm -r run build",
     "test": "pnpm --filter server run test && pnpm --filter web run test",
+    "test:skill": "node --test skills/apphub-release/scripts/oss-multipart.test.mjs",
     "test:e2e": "pnpm --filter server run test:e2e",
     "test:e2e:web": "pnpm --filter e2e run test",
-    "check": "pnpm lint && pnpm type-check && pnpm test && pnpm test:e2e",
+    "check": "pnpm lint && pnpm type-check && pnpm test && pnpm test:skill && pnpm test:e2e",
     "lint": "pnpm -r run lint",
     "type-check": "pnpm -r run type-check",
     "prepare": "lefthook install"

@@ -17,13 +17,14 @@ apphub-release skill 把发版能力下沉到应用开发侧：应用项目的 a
 | --- | --- | --- |
 | K1 | skill 落本仓库 `skills/apphub-release/`，作为平台交付物随仓库演进；应用项目拷贝到其 `.claude/skills/`（或用户级 `~/.claude/skills/`）安装 | 随平台接口演进统一维护版本；分发即拷贝目录 |
 | K2 | 认证走**管理端 API**：平台为应用团队发「发版账号」（具 appcenter 权限），skill 登录换 JWT；平台开启签名时随账号下发 `SIGNATURE_SECRET` | M1 未提供发版开放 API；零后端改动，账号权限由平台 RBAC 收敛 |
-| K3 | 上传脚本为**零依赖单文件 Node CLI**（Node ≥ 18 内置 fetch / crypto / https） | 应用侧项目环境不可控，免除 npm install；与前端 ali-oss 简单 PutObject 同语义（policy 仅精确键 PutObject，本就不允许 multipart） |
+| K3 | 上传脚本为**零依赖 Node CLI**（Node ≥ 18 内置 fetch / crypto / https），传输层可拆为同目录模块 | 应用侧项目环境不可控，免除 npm install；早期仅支持与前端 ali-oss 同语义的简单 PutObject，K10 起原生支持 multipart，且仍不引入第三方 OSS SDK |
 | K4 | publish 默认需 agent 向用户确认发布摘要后执行；用户明示全自动（CI）时跳过 | draft 上传登记不外显，publish 即客户端可见，属外向动作 |
 | K5 | 内置 **electron-builder / tauri build** 双框架的打包指导与产物定位（含 .sig / blockmap / latest.yml 收集），其余项目走配置自定义 `buildCommand` | 平台目标客群以 electron / tauri 桌面应用为主；框架产物（sha512 / minisign 签名）只能构建时生成（主张 A5），skill 负责收集登记 |
 | K6 | 配置文件 `.apphub-release.json` 只存非敏感项；凭据走**环境变量优先 + 配置 `credentials` 节兜底**双通道 | 配置文件可入库共享，凭据不误提交（SKILL.md 指导生成时写入 .gitignore） |
 | K7 | 文档组织：本文（设计）+ SKILL.md（即使用说明）+ 接入手册 README 索引挂链接 | 遵循「文档先行」；不为 skill 再写独立使用手册，避免与 SKILL.md 双份维护 |
 | K8 | **技能自主更新**：构建时把 skill 按版本目录 + `manifest.json`（每文件 sha256）写入 `server/dist/skill/apphub-release/`，由后端公开接口分发；CLI 提供 `self-update`（检查 / 下载 / 校验 / 原子替换 / 失败回滚），SKILL.md 在发版前触发检查 | 项目级 skill 无内置远端同步能力；复用既有 `/api` 反代，**部署无需改 nginx 配置**；产物随 server 发布包同源；逐文件分发免 zip 依赖 |
 | K9 | **冷启动入口**：同一公开接口提供 `install.mjs`（安装 / 更新器）与安装说明（给 agent 的操作指引），按 manifest 下载并 sha256 校验后写入目标目录；不依赖本地已安装技能 | 自更新无法覆盖「未安装 / 旧版无 self-update」场景；用户只需一个接口地址交给 agent，零鉴权、零第三方依赖 |
+| K10 | `upload` **原生支持 OSS multipart**（`--multipart auto / off`，默认 auto），传输实现抽离为同目录 `scripts/oss-multipart.mjs`；超阈值对象按片固定并发上传、分片级重试、单分片无进展超时、字节进度 / 速度 / ETA，失败尽力 Abort，Complete 后 HEAD 校验；`auto` 失败不自动降级 | 500 MB 级安装包单连接跨境吞吐差、整包失败只能全量重传；分片能力必须由 skill 本体随自更新一起分发，外部适配脚本无法使技能本身获得该能力（需求与实现说明见 [AppHub skill OSS分片上传上游改造说明](../指南/AppHub%20skill%20OSS分片上传上游改造说明.md)） |
 
 ## 3. 总体架构
 
@@ -33,13 +34,16 @@ flowchart LR
     agent["应用项目 agent<br/>（装 apphub-release skill）"]
     skill["SKILL.md 指令<br/>（流程编排 / 产物定位 / 确认门）"]
     cli["scripts/apphub.mjs<br/>零依赖 Node CLI"]
+    multipart["scripts/oss-multipart.mjs<br/>分片计划 / 签名 / 并发 / 重试 / Abort / HEAD"]
     hub["apphub 管理端 API<br/>（JWT + 可选全局签名）"]
-    oss["OSS 私有桶<br/>（STS 精确键 PutObject）"]
+    oss["OSS 私有桶<br/>（STS 精确键 PutObject + AbortMultipartUpload）"]
     open["更新检测开放 API<br/>（豁免签名）"]
     dev --> agent
     agent --> skill --> cli
+    cli -->|"超过阈值时分片传输"| multipart
     cli -->|"登录 / 建版本 / 签发 STS / 登记 / 发布"| hub
-    cli -->|"PutObject 安装包 + blockmap"| oss
+    cli -->|"PutObject / multipart 安装包 + blockmap"| oss
+    multipart -->|"Initiate / UploadPart / Complete / Abort / HEAD"| oss
     cli -->|"发布后验证可见性"| open
 ```
 
@@ -52,32 +56,35 @@ flowchart LR
 
 ```text
 skills/apphub-release/
-├── SKILL.md              # agent 指令（skill 的使用说明本体）
-├── VERSION               # skill 版本（semver，随 skill 变更递增）
+├── SKILL.md                    # agent 指令（skill 的使用说明本体）
+├── VERSION                     # skill 版本（semver，随 skill 变更递增）
 └── scripts/
-    └── apphub.mjs        # 零依赖 Node CLI（命令集见 §6）
+    ├── apphub.mjs              # 零依赖 Node CLI（命令集见 §6）
+    ├── oss-multipart.mjs       # OSS 分片传输模块（K10，apphub.mjs 同目录 import）
+    └── oss-multipart.test.mjs  # 分片模块单元测试（node:test，仅源码，不随 manifest 分发）
 ```
 
 安装方式：将 `apphub-release` 整个目录拷贝至应用项目 `.claude/skills/apphub-release/`（项目级）或 `~/.claude/skills/apphub-release/`（用户级）。skill 不入 apphub 的 pnpm workspace、不被 lefthook lint 辖管（glob 仅覆盖 server/ web/），随仓库纯文件交付。
 
 **版本策略**：`VERSION` 是 skill 自身版本，独立于平台版本；**每次改动 `SKILL.md` / `scripts/` 必须递增**——客户端按 semver 判定，版本不变时不会触发自更新（manifest 的 sha256 变化不足以驱动更新）。
 
-**自更新分发（K8）**：构建时 `scripts/build-skill-manifest.mjs` 把 skill 复制到 `server/dist/skill/apphub-release/{version}/`（白名单：`SKILL.md` / `VERSION` / `scripts/**`），并生成同目录 `manifest.json`。产物随发布包 `server/` 目录部署，由后端公开接口读取——**复用既有 `/api` 反代，部署无需新增 nginx 配置**。
+**自更新分发（K8）**：构建时 `scripts/build-skill-manifest.mjs` 把 skill 复制到 `server/dist/skill/apphub-release/{version}/`（白名单：`SKILL.md` / `VERSION` / `scripts/**`；`*.test.mjs` / `*.spec.mjs` 不进分发），并生成同目录 `manifest.json`。**`apphub.mjs` 与 `oss-multipart.mjs` 必须同一版本一起分发**——旧 manifest 不会自动补发新增文件，只更新 CLI 会导致启动时 import 失败。产物随发布包 `server/` 目录部署，由后端公开接口读取——**复用既有 `/api` 反代，部署无需新增 nginx 配置**。
 
 ```jsonc
 {
   "name": "apphub-release",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "generatedAt": "2026-10-24T08:00:00.000Z",
   "files": [
     {
       "path": "SKILL.md",
-      "url": "/api/skill/apphub-release/files/1.4.0/SKILL.md",
+      "url": "/api/skill/apphub-release/files/1.5.0/SKILL.md",
       "sha256": "…",
       "size": 12345
     },
-    { "path": "VERSION", "url": "/api/skill/apphub-release/files/1.4.0/VERSION", "sha256": "…", "size": 6 },
-    { "path": "scripts/apphub.mjs", "url": "/api/skill/apphub-release/files/1.4.0/scripts/apphub.mjs", "sha256": "…", "size": 34567 }
+    { "path": "VERSION", "url": "/api/skill/apphub-release/files/1.5.0/VERSION", "sha256": "…", "size": 6 },
+    { "path": "scripts/apphub.mjs", "url": "/api/skill/apphub-release/files/1.5.0/scripts/apphub.mjs", "sha256": "…", "size": 34567 },
+    { "path": "scripts/oss-multipart.mjs", "url": "/api/skill/apphub-release/files/1.5.0/scripts/oss-multipart.mjs", "sha256": "…", "size": 23456 }
   ],
   "installer": { "path": "install.mjs", "url": "/api/skill/apphub-release/install.mjs", "sha256": "…", "size": 8678 },
   "installDoc": { "path": "INSTALL.md", "url": "/api/skill/apphub-release", "sha256": "…", "size": 2456 }
@@ -140,7 +147,7 @@ skills/apphub-release/
 | `self-update` | `[--check]` `[--yes]` `[--base-url]` | 技能自检 / 更新：读本地 `VERSION` 与远端 manifest 比对；`--check` 只提示（更新源不可达不阻断）；更新时逐文件下载 → sha256 校验 → 原子替换，失败回滚。不加载配置、不登录（`--base-url` 缺省读配置，再回落线上基址） |
 | `status` | — | 连通自检：登录 → 应用信息（appKey / framework / 状态）→ 通道清单 → 各通道最新版本。首次接入与排障第一步 |
 | `create-version` | `--version` `--title` `[--notes]` `[--force]` `[--channel]` | 建草稿版本；**幂等**：同通道同版本已有 draft 直接复用并提示，已 published / offline 则报错 |
-| `upload` | `--version` `--platform` `[--arch]` `--file` `[--blockmap]` `[--sig-file]` `[--replace]` | 单包上传全链：流式算 sha256（hex）/ sha512（base64）→ 读 minisign 签名 → 签发 STS → PutObject 安装包（及 blockmap）→ 登记包记录。**draft / published 均可**（offline 冻结）：槽位空闲即补包；`--replace` 替换已占用槽位（已发布版本换包用，服务端事务内软删旧包） |
+| `upload` | `--version` `--platform` `[--arch]` `--file` `[--blockmap]` `[--sig-file]` `[--replace]` + 传输参数（见 §8） | 单包上传全链：流式算 sha256（hex）/ sha512（base64）→ 读 minisign 签名 → 签发 STS → 安装包与 blockmap **各自**选择单次 PutObject 或 multipart → 两者都成功后登记包记录。**draft / published 均可**（offline 冻结）：槽位空闲即补包；`--replace` 替换已占用槽位（已发布版本换包用，服务端事务内软删旧包） |
 | `remove-package` | `--version` `--platform` `[--arch]` | 删版本下的包记录（连带清理 OSS 对象）。draft / published 均可（offline 冻结）；published 下删除即撤回该平台分发，须先获用户确认 |
 | `publish` | `--version` `[--channel]` | 发布版本（状态机校验与产物完整性校验由服务端兜底） |
 | `verify` | `--expect` `--platform` `[--arch]` `[--channel]` `[--current]` | 调更新检测开放 API，断言 `latestVersion === expect` 且 `hasUpdate === true` |
@@ -163,9 +170,13 @@ skills/apphub-release/
 3. `sign = HMAC-SHA256(签名串, signSecret)` 小写 hex；头三件套 `sign` / `timestamp` / `noncestr`
 4. GET 只带 `Authorization: Bearer {token}`，不签名
 
-## 8. OSS STS 直传实现（零依赖）
+## 8. OSS STS 直传实现（单次 PutObject + multipart，零依赖）
 
-与 web 前端 `useOssUploader.ts` 的 ali-oss `client.put` 同语义（简单 PutObject），脚本用 Node 内置 `https` 流式实现：
+传输层由 `scripts/oss-multipart.mjs` 承载，`apphub.mjs` 只做参数解析与对象级传输选择；单次 PUT 路径保留在 `apphub.mjs` 的 `ossPutObject`，作为小文件与 `--multipart off` 的稳定路径。全程使用 Node 内置 `https` / `crypto` / `fs`，不引入第三方 OSS SDK。
+
+### 8.1 单次 PutObject（原有路径）
+
+与 web 前端 `useOssUploader.ts` 的 ali-oss `client.put` 同语义，脚本用 Node 内置 `https` 流式实现：
 
 - **Header 签名**：`Authorization: OSS {accessKeyId}:{base64(HMAC-SHA1(StringToSign, accessKeySecret))}`
 - `StringToSign = "PUT\n" + Content-MD5(空) + "\n" + Content-Type(空) + "\n" + Date(GMT) + "\n" + CanonicalizedOSSHeaders + CanonicalizedResource`
@@ -173,8 +184,34 @@ skills/apphub-release/
   - `CanonicalizedResource = /{bucket}/{objectKey}`（**未 URL 编码的原始对象键**）
 - **请求路径**单独按段 `encodeURIComponent`——签名用原始键、URL 用编码键，两者不可混用（OSS 签名经典坑）
 - `Content-Length` 预先 stat 声明，body 为 `createReadStream` 管道输出——大安装包不整读内存
-- 安装包与 blockmap 共用同一 STS 凭证（policy 本就签发两键 PutObject 权限），顺序：上传安装包 → 上传 blockmap → 回调登记
-- 凭证时效 1h 覆盖单命令周期；PutObject 单请求上限 5GB，超限属平台侧需引入分片的场景（当前 STS policy 不含 multipart 权限，与前端一致不支持断点续传，明确为边界）
+- 安装包与 blockmap 共用同一 STS 凭证（policy 签发两键的 PutObject + AbortMultipartUpload 权限），顺序：上传安装包 → 上传 blockmap → 回调登记
+- PutObject 单请求上限 5GB；超过阈值改走 multipart，单命令不再受单连接吞吐限制
+
+### 8.2 multipart（K10）
+
+**传输选择**：`--multipart off` 对整个 upload 命令生效；`auto`（默认）对安装包与 blockmap **各自独立**判断，严格大于 `--threshold`（默认 64 MiB）才走分片，空文件永不走 multipart。`auto` 失败不自动切换到 `off`。
+
+| 参数 | 环境变量 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--multipart` | `APPHUB_MULTIPART` | `auto` | `auto` / `off` |
+| `--threshold` | `APPHUB_MULTIPART_THRESHOLD_BYTES` | 64 MiB | 严格大于才分片；`0` 可强制非空对象分片 |
+| `--part-size` | `APPHUB_MULTIPART_PART_SIZE_BYTES` | 16 MiB | 配置值 100 KiB ~ 5 GiB，最后一片可短；分片数上限 10000 |
+| `--concurrency` | `APPHUB_MULTIPART_CONCURRENCY` | 4 | 同时进行的 UploadPart 数 |
+| `--retry` | `APPHUB_MULTIPART_RETRIES` | 3 | 单分片最大重试次数（不含首次） |
+| `--part-timeout` | `APPHUB_MULTIPART_PART_TIMEOUT_MS` | 90 s | 单分片无进展超时 |
+| `--progress-interval` | `APPHUB_MULTIPART_PROGRESS_INTERVAL_MS` | 15 s | 无新百分比时的最长静默间隔 |
+
+参数优先级 **CLI > 环境变量 > 默认值**；空字符串按未设置处理，非法值直接失败，不静默回退默认值。
+
+**协议流程**：STS 签发 → `POST /{objectKey}?uploads` 取 UploadId → 固定并发 `PUT ?partNumber=N&uploadId=…`（流式 `createReadStream(start, end)`，不整读内存）→ 全部分片成功后按 partNumber 升序 `POST ?uploadId=…` 提交 ETag → HEAD 大小校验 → 登记包记录。签名继续用 V1 Header 签名：CanonicalizedResource 使用未编码原始键并按字典序附带 `uploads` / `partNumber` / `uploadId` 子资源；请求路径只对 objectKey 路径段编码，两者不混用。
+
+**重试与超时**：每个分片独立重试，已成功分片不重传；网络错误、请求超时、HTTP 408 / 429 / 5xx、UploadPart 缺少 ETag 可重试，其他 4xx 与协议字段缺失不重试；指数退避 + 随机抖动（基础 500 ms）。超时按「单分片无网络进展」计算，默认 90 s，终止时销毁请求、响应与文件流。
+
+**失败语义**：任一分片最终失败、Complete 失败或 HEAD 校验失败都尽力 `DELETE ?uploadId=…` 中止会话，**绝不调用包登记**；Abort 自身失败只记录警告，不掩盖原始错误。Complete 后 HEAD 语义严格区分：403 视为 STS 仅具备上传权限，记录警告并按「全部分片成功且 Complete 成功」判定完成；其他 4xx / 5xx / 网络错误或大小不一致一律失败。
+
+**STS 权限**：`oss:PutObject` 覆盖 Initiate / UploadPart / Complete；服务端 session policy 额外授予 `oss:AbortMultipartUpload`（仍收敛到安装包与 blockmap 两个精确键），RAM 角色策略需同步具备该 Action，否则失败会话只能依赖 OSS 生命周期规则清理。HEAD 校验依赖 `oss:GetObject`，未授予时按上述 403 降级语义处理。
+
+**安全与日志**：进度、重试、最终错误与 Abort 警告统一经过脱敏函数，输出中不得出现账号、JWT、`securityToken`、AccessKey、Authorization 或 OSS 签名串；凭证只存在进程内存。
 
 ## 9. 发版标准流程
 
@@ -189,7 +226,12 @@ sequenceDiagram
     A->>A: 定位产物（exe / sig / blockmap / latest.yml 对照）
     A->>S: status（登录自检）+ create-version（幂等建 draft）
     A->>S: upload × N 平台（STS 签发）
-    A->>O: PutObject 安装包 + blockmap（STS）
+    alt 对象未超过阈值或 multipart=off
+        A->>O: PutObject 安装包 + blockmap（STS）
+    else 超过阈值（auto）
+        A->>O: Initiate / UploadPart × N（并发 + 重试）
+        A->>O: Complete（partNumber 升序）→ HEAD 大小校验
+    end
     A->>S: 登记包记录（哈希 / sha512 / minisign）
     A->>U: 呈现发布摘要，征得确认（K4 确认门）
     U-->>A: 确认
@@ -244,13 +286,19 @@ sequenceDiagram
 6. **发布后平台包维护**：published 下可补新平台包（槽位空闲）、`--replace` 换包、`remove-package` 撤回某平台分发；offline 版本一律拒绝（重新分发须新建版本）。**替换 / 删除不推动已安装客户端**（版本号未变，客户端按 semver 判断无更新），要修复存量用户必须发新版本——skill 须在动作前后明确告知
 7. **并发发版**：同账号多处并发操作同一 draft 由服务端唯一约束与状态机兜底（槽位冲突 003004002 / 状态机 003003004），skill 不做本地锁
 8. **自更新的生效时机**：`scripts/` 下的 CLI 每次执行读磁盘最新内容，更新后即时生效；`SKILL.md` 在已调用过的会话中已固化，不追溯更新，下次调用或新开会话生效。平台尚未发布 skill 产物时 `--check` 只告警，发版继续使用本地版本
+9. **multipart 不做跨 job 续传**：第一版只保证单次 upload 内的分片级重试，不持久化 UploadId / 已完成分片 / ETag；命令失败后重跑会重新签发 STS 并重新分片。未完成会话由 Abort（尽力）与 OSS 生命周期规则兜底清理
+10. **multipart 的兼容回退**：`--multipart off` 只改变传输方式，认证、版本、STS、登记、发布与验证语义不变；`auto` 失败不得自动降级，须由操作者显式选择回退
+11. **HEAD 校验的权限边界**：STS 仅授予上传权限时 HEAD 返回 403，脚本记录警告并继续（完成依据为全部分片成功且 Complete 成功）；若平台侧为 STS 追加 `oss:GetObject`，则执行真实大小校验，大小不一致仍会失败且不登记
+12. **已成功上传但未登记的对象**：传输成功而包登记失败时，对象暂时成为孤儿；不删除可能已被其他流程使用的对象，由同版本重跑、`--replace` 与桶生命周期策略处理
 
 ## 13. 验收标准
 
-1. `skills/apphub-release/` 交付完整（SKILL.md + scripts/apphub.mjs），拷贝即安装、零依赖可运行
+1. `skills/apphub-release/` 交付完整（SKILL.md + `scripts/apphub.mjs` + `scripts/oss-multipart.mjs`），拷贝即安装、零依赖可运行
 2. 本地平台真机冒烟全闭环（真实 OSS）：`status` 自检 → 建测试应用 → `create-version`（含 draft 复用幂等分支）→ `upload`（sha256 / sha512 落库正确、blockmap 直传成功）→ `publish` → `verify` 断言通过 → `update-version` → **published 下补包 / `--replace` 换包 / `remove-package` 撤包** → `offline` → 清理测试数据（版本下线后删应用）
 3. 错误路径抽验：未配签名密钥调写接口 401、重复版本号、槽位重复——错误码与 §11 处置一致
-4. `pnpm check` 全绿（skill 目录不参与 lint / workspace，需验证不破坏现有门禁）
-5. 接入手册 README 选册导航与 docs/README.md 索引挂接本设计文档
-6. **自更新验证**：本地分发接口下 `self-update --check` 正确比对版本 → `self-update` 后 `VERSION` 与文件内容为新版；篡改文件使 sha256 不匹配时更新失败并回滚到旧版本；`--check` 在更新源不可达时告警但不阻断
-7. **冷启动验证**：目标目录不存在时 `install.mjs` 完成安装；旧版本目录可升级；`--check` 正确输出未安装 / 有更新 / 已最新；sha256 不匹配时中止且不写入目标目录
+4. `pnpm check` 全绿（含 `pnpm test:skill`；skill 源码不参与 lint / workspace，需验证不破坏现有门禁）
+5. **multipart 单元测试**：`node --test skills/apphub-release/scripts/oss-multipart.test.mjs` 覆盖分片计划、签名与报文、参数优先级、分片重试、Abort 不掩盖原始错误、HEAD 403 / 大小不一致与日志脱敏
+6. **multipart 真机验收**：小文件仍单次 PUT；超过阈值的大文件走分片（进度、Complete、HEAD、登记、更新检测均成功）；安装包与 blockmap 混合模式正常；`--multipart off` 回退可用；失败会话不登记包记录且尽力 Abort
+7. **自更新验证**：本地分发接口下 `self-update --check` 正确比对版本 → `self-update` 后 `VERSION` 与文件内容为新版（`apphub.mjs` 与 `oss-multipart.mjs` 同时落地）；篡改文件使 sha256 不匹配时更新失败并回滚到旧版本；`--check` 在更新源不可达时告警但不阻断
+8. **冷启动验证**：目标目录不存在时 `install.mjs` 完成安装；旧版本目录可升级；`--check` 正确输出未安装 / 有更新 / 已最新；sha256 不匹配时中止且不写入目标目录
+9. 接入手册 README 选册导航与 docs/README.md 索引挂接本设计文档

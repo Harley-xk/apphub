@@ -15,6 +15,8 @@ import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { parseArgs } from 'node:util'
 
+import { multipartUpload, resolveMultipartOptions, shouldUseMultipart } from './oss-multipart.mjs'
+
 /* ---------------------------------- 出错与输出 ---------------------------------- */
 
 class CliError extends Error {
@@ -550,6 +552,15 @@ async function cmdUpload(client, config, args) {
   if (!stat?.isFile())
     fail(`安装包文件不存在：${file}`)
 
+  // 传输参数先于任何网络动作校验：非法值直接失败，不静默套用默认值
+  let transferOptions
+  try {
+    transferOptions = resolveMultipartOptions(args.values)
+  }
+  catch (error) {
+    fail(error instanceof Error ? error.message : String(error))
+  }
+
   const app = await resolveApp(client)
   const channel = await resolveChannel(client, app.id, config.channel)
   const version = await requireVersion(client, app.id, channel, args.values.version, ['draft', 'published'], '上传安装包')
@@ -590,11 +601,36 @@ async function cmdUpload(client, config, args) {
   const credential = await client.request('POST', `/appcenter/version/${version.id}/package/upload-token`, { body: uploadBody })
   ok(`STS 凭证已签发（${credential.region} / ${credential.bucket}，${new Date(credential.expiration).toLocaleString()} 过期）`)
 
-  await ossPutObject(credential, credential.objectKey, file, stat.size)
-  ok(`安装包已直传：${credential.objectKey}（${stat.size} 字节）`)
-  if (blockmap) {
-    await ossPutObject(credential, credential.blockmapObjectKey, blockmap, blockmapFileSize)
-    ok(`blockmap 已直传：${credential.blockmapObjectKey}（${blockmapFileSize} 字节）`)
+  // 安装包与 blockmap 各自独立选择单次 PUT / multipart；任一失败即终止，绝不进入包登记
+  const targetLabel = `${platform}${arch ? `-${arch}` : ''}`
+  const transferObjects = [{ role: '安装包', objectKey: credential.objectKey, filePath: file, size: stat.size }]
+  if (blockmap)
+    transferObjects.push({ role: 'blockmap', objectKey: credential.blockmapObjectKey, filePath: blockmap, size: blockmapFileSize })
+
+  for (const item of transferObjects) {
+    const label = `${targetLabel} ${item.role}`
+    try {
+      if (shouldUseMultipart(transferOptions, item.size)) {
+        await multipartUpload({
+          credential,
+          objectKey: item.objectKey,
+          filePath: item.filePath,
+          fileSize: item.size,
+          fileName: path.basename(item.filePath),
+          label,
+          options: transferOptions,
+        })
+        ok(`${item.role}已分片上传：${item.objectKey}（${item.size} 字节）`)
+      }
+      else {
+        console.log(`  [${label}] ${path.basename(item.filePath)} ${item.size} 字节 → 单次 PUT`)
+        await ossPutObject(credential, item.objectKey, item.filePath, item.size)
+        ok(`${item.role}已直传：${item.objectKey}（${item.size} 字节）`)
+      }
+    }
+    catch (error) {
+      fail(`${item.role}上传失败（未登记包记录）：${error instanceof Error ? error.message : String(error)}`)
+    }
   }
 
   const registerBody = {
@@ -738,7 +774,7 @@ const COMMANDS = {
     },
   },
   upload: {
-    brief: '单包上传全链：哈希 → STS → OSS 直传 → 登记包记录（draft / published）',
+    brief: '单包上传全链：哈希 → STS → OSS 直传 / 分片 → 登记包记录（draft / published）',
     options: {
       version: { ...STRING, help: '所属版本号（必填；draft / published，offline 冻结）' },
       platform: { ...STRING, help: 'windows / macos / linux / android（必填）' },
@@ -747,6 +783,13 @@ const COMMANDS = {
       blockmap: { ...STRING, help: 'blockmap 差分文件路径（electron 可选）' },
       'sig-file': { ...STRING, help: 'minisign 签名文件路径（tauri 必需）' },
       replace: { ...BOOLEAN, help: '替换已占用的平台槽位（已发布版本换包；仅影响新下载）' },
+      multipart: { ...STRING, help: '大文件传输方式 auto / off（默认 auto；off 全部单次 PUT）' },
+      threshold: { ...STRING, help: '分片阈值（字节或 64MiB；严格大于才分片，默认 64MiB）' },
+      'part-size': { ...STRING, help: '分片大小（字节或 16MiB，默认 16MiB）' },
+      concurrency: { ...STRING, help: '分片并发数（默认 4）' },
+      retry: { ...STRING, help: '单分片最大重试次数（默认 3，不含首次）' },
+      'part-timeout': { ...STRING, help: '单分片无进展超时（毫秒或 90s，默认 90s）' },
+      'progress-interval': { ...STRING, help: '进度静默输出间隔（毫秒或 15s，默认 15s）' },
     },
     async run(client, config, args) {
       for (const key of ['version', 'platform', 'file']) {
@@ -851,7 +894,7 @@ function printUsage() {
   for (const [name, command] of Object.entries(COMMANDS)) {
     console.log(`  ${name.padEnd(16)}${command.brief}`)
     for (const [flag, option] of Object.entries(command.options))
-      console.log(`    --${flag.padEnd(12)}${option.help ?? ''}`)
+      console.log(`    --${flag.padEnd(18)}${option.help ?? ''}`)
   }
 }
 

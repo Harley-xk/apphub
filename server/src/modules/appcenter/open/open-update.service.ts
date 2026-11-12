@@ -10,7 +10,7 @@ import { rcompare, valid as validSemver } from 'semver'
 
 import { businessError } from '../../../common/exceptions/business-error'
 import { AppService } from '../app/app.service' // 值导入：构造注入元数据需要（import type 会擦除）
-import { APP_STATUS, ELECTRON_MANIFEST_ARCH, STABLE_CHANNEL_CODE, TAURI_TARGET_MAP } from '../appcenter.constants'
+import { APP_STATUS, ELECTRON_MANIFEST_ARCH, PACKAGE_ARCH_VALUES, STABLE_CHANNEL_CODE, TAURI_TARGET_MAP } from '../appcenter.constants'
 import type { AppPackageEntity } from '../entities/app-package.entity'
 import { AppEntity } from '../entities/app.entity'
 import { AppcenterErrorCode } from '../error-codes'
@@ -62,15 +62,16 @@ export class OpenUpdateService {
     }
   }
 
-  /** electron latest*.yml 渲染（无 published 版本返回 null → 404，版本比较在客户端完成，D24） */
-  async getElectronManifest(input: { appKey: string, channelCode: string, platform: string }): Promise<string | null> {
-    // 平台级 feed 的 arch 固定映射（设计 §3.4）：latest.yml→x64、latest-mac.yml→universal、latest-linux.yml→x64
-    const candidate = await this.findCandidate(
-      input.appKey,
-      input.channelCode,
-      input.platform,
-      ELECTRON_MANIFEST_ARCH[input.platform] ?? null,
-    )
+  /**
+   * electron latest*.yml 渲染（无 published 版本返回 null → 404，版本比较在客户端完成，D24）
+   * - 不传 arch：平台级 feed，走固定映射（latest.yml→x64、latest-mac.yml→universal、latest-linux.yml→x64）
+   * - 传 arch：架构级 feed，按精确槽位取包；白名单外取值视同无该槽位
+   */
+  async getElectronManifest(input: { appKey: string, channelCode: string, platform: string, arch?: string }): Promise<string | null> {
+    if (input.arch !== undefined && !PACKAGE_ARCH_VALUES.includes(input.arch))
+      return null
+    const arch = input.arch ?? ELECTRON_MANIFEST_ARCH[input.platform] ?? null
+    const candidate = await this.findCandidate(input.appKey, input.channelCode, input.platform, arch)
     if (!candidate)
       return null
     const pkg = candidate.packages[0]

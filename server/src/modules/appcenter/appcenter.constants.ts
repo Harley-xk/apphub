@@ -70,6 +70,17 @@ export const ELECTRON_MANIFEST_ARCH: Readonly<Record<string, string>> = {
 }
 
 /**
+ * 架构级 electron feed 的合法 arch 段（D24 扩展）：
+ * `latest-{arch}.yml` / `latest-{arch}-mac.yml` / `latest-{arch}-linux.yml`——
+ * 白名单外取值视同无该槽位返回 404（与「槽位无包即 404」同语义，不做 400 参数校验）
+ */
+export const PACKAGE_ARCH_VALUES: readonly string[] = [
+  PACKAGE_ARCH.X64,
+  PACKAGE_ARCH.ARM64,
+  PACKAGE_ARCH.UNIVERSAL,
+]
+
+/**
  * tauri-plugin-updater 的 target → (platform, arch) 映射（D24）：
  * 未识别的 target 由调用方按「无更新」处理（204）
  */

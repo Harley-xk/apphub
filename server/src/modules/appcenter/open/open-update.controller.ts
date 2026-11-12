@@ -2,7 +2,7 @@
  * 作者: Harley-xk
  * 创建: 2026-10-16
  *
- * 描述: 框架内建更新器适配端点（D24）：electron latest*.yml ×3 与 tauri JSON，AppKey 从 URL 路径提取。
+ * 描述: 框架内建更新器适配端点（D24）：electron latest*.yml 平台级 ×3 + 架构级 ×3 与 tauri JSON，AppKey 从 URL 路径提取。
  * manifest 为框架协议裸载荷，经 @Res 直出绕过统一响应包裹（electron-updater / tauri-plugin-updater 不识别包裹结构）
  */
 import { Controller, Get, Param, Res } from '@nestjs/common'
@@ -53,6 +53,43 @@ export class OpenUpdateController {
     await this.writeElectronManifest(response, appKey, channel, PACKAGE_PLATFORM.LINUX)
   }
 
+  // 路由注册顺序（Nest 按方法定义顺序注册）：平台级 → 架构级带平台后缀 → 架构级 Windows。
+  // path-to-regexp 的 :arch 贪婪匹配到路径分隔符，latest-x64-mac.yml 会被 latest-:arch.yml
+  // 捕获为 arch=x64-mac，故平台后缀路由必须先于裸 latest-:arch.yml 注册
+
+  @ApiOperation({ summary: 'electron-updater 清单（macOS，架构级；无对应架构包 404）' })
+  @Get('electron/latest-:arch-mac.yml')
+  async getElectronLatestMacByArch(
+    @Param('appKey') appKey: string,
+    @Param('channel') channel: string,
+    @Param('arch') arch: string,
+    @Res() response: Response,
+  ): Promise<void> {
+    await this.writeElectronManifest(response, appKey, channel, PACKAGE_PLATFORM.MACOS, arch)
+  }
+
+  @ApiOperation({ summary: 'electron-updater 清单（Linux，架构级；无对应架构包 404）' })
+  @Get('electron/latest-:arch-linux.yml')
+  async getElectronLatestLinuxByArch(
+    @Param('appKey') appKey: string,
+    @Param('channel') channel: string,
+    @Param('arch') arch: string,
+    @Res() response: Response,
+  ): Promise<void> {
+    await this.writeElectronManifest(response, appKey, channel, PACKAGE_PLATFORM.LINUX, arch)
+  }
+
+  @ApiOperation({ summary: 'electron-updater 清单（Windows，架构级；无对应架构包 404）' })
+  @Get('electron/latest-:arch.yml')
+  async getElectronLatestByArch(
+    @Param('appKey') appKey: string,
+    @Param('channel') channel: string,
+    @Param('arch') arch: string,
+    @Res() response: Response,
+  ): Promise<void> {
+    await this.writeElectronManifest(response, appKey, channel, PACKAGE_PLATFORM.WINDOWS, arch)
+  }
+
   @ApiOperation({ summary: 'tauri-plugin-updater 清单（无更新 / 未识别 target 返回 204）' })
   @Get('tauri/:target/:currentVersion')
   async getTauriManifest(
@@ -82,8 +119,9 @@ export class OpenUpdateController {
     appKey: string,
     channel: string,
     platform: string,
+    arch?: string,
   ): Promise<void> {
-    const manifest = await this.openUpdateService.getElectronManifest({ appKey, channelCode: channel, platform })
+    const manifest = await this.openUpdateService.getElectronManifest({ appKey, channelCode: channel, platform, arch })
     if (manifest === null) {
       response.status(404).send()
       return

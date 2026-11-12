@@ -243,6 +243,46 @@ describe('AppcenterModule 开放 API (e2e)', () => {
     await request(server).get(`/api/update/${APP_M_KEY}/stable/electron/latest-mac.yml`).expect(404)
   })
 
+  it('electron 架构级 mac feed：latest-x64-mac.yml 精确命中 x64 槽位', async () => {
+    const res = await request(server)
+      .get(`/api/update/${APP_M_KEY}/stable/electron/latest-x64-mac.yml`)
+      .expect(200)
+      .expect('Content-Type', /yaml/)
+    const manifest = yamlLoad(res.text) as Record<string, unknown>
+    expect(manifest.version).toBe('1.0.0')
+    expect(manifest.path).toBe('app-1.0.0-mac-x64.dmg')
+    const files = manifest.files as { url: string }[]
+    expect(files[0].url).toContain(`packages/${APP_M_KEY}/stable/1.0.0/macos-x64/app-1.0.0-mac-x64.dmg`)
+  })
+
+  it('electron 架构级 feed：槽位无包不回退其他架构（404）', async () => {
+    // arm64 无包；通用应用只有 universal 包——均不得回退
+    await request(server).get(`/api/update/${APP_M_KEY}/stable/electron/latest-arm64-mac.yml`).expect(404)
+    await request(server).get(`/api/update/${APP_E_KEY}/stable/electron/latest-x64-mac.yml`).expect(404)
+  })
+
+  it('electron 架构级 feed：universal 与 x64 同时可用（universal 路由复用平台级结果）', async () => {
+    const universal = await request(server)
+      .get(`/api/update/${APP_E_KEY}/stable/electron/latest-universal-mac.yml`)
+      .expect(200)
+    const x64 = await request(server)
+      .get(`/api/update/${APP_E_KEY}/stable/electron/latest-x64.yml`)
+      .expect(200)
+    expect((yamlLoad(universal.text) as Record<string, unknown>).path).toBe('app-1.1.0.dmg')
+    expect((yamlLoad(x64.text) as Record<string, unknown>).path).toBe('app-1.1.0.exe')
+  })
+
+  it('electron 架构级 feed：windows / linux 无对应架构包返回 404', async () => {
+    await request(server).get(`/api/update/${APP_E_KEY}/stable/electron/latest-arm64.yml`).expect(404)
+    await request(server).get(`/api/update/${APP_E_KEY}/stable/electron/latest-x64-linux.yml`).expect(404)
+  })
+
+  it('electron 架构级 feed：未知 arch 视同无该槽位（404）', async () => {
+    // 契约守护（设计 §3.4）：白名单外 arch 不做 400 参数校验，统一 404 与 electron-updater 容错语义一致
+    await request(server).get(`/api/update/${APP_E_KEY}/stable/electron/latest-ia32-mac.yml`).expect(404)
+    await request(server).get(`/api/update/${APP_E_KEY}/stable/electron/latest-foo.yml`).expect(404)
+  })
+
   it('tauri manifest：version / signature / 签名下载 URL / [force] 首行', async () => {
     const res = await request(server)
       .get(`/api/update/${APP_T_KEY}/stable/tauri/windows-x86_64/1.9.0`)

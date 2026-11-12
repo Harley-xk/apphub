@@ -53,9 +53,10 @@ export class OpenUpdateController {
     await this.writeElectronManifest(response, appKey, channel, PACKAGE_PLATFORM.LINUX)
   }
 
-  // 路由注册顺序（Nest 按方法定义顺序注册）：平台级 → 架构级带平台后缀 → 架构级 Windows。
+  // 路由注册顺序（Nest 按方法定义顺序注册）：平台级 → 架构级带平台段（mac / linux）→ 架构级 Windows。
   // path-to-regexp 的 :arch 贪婪匹配到路径分隔符，latest-x64-mac.yml 会被 latest-:arch.yml
-  // 捕获为 arch=x64-mac，故平台后缀路由必须先于裸 latest-:arch.yml 注册
+  // 捕获为 arch=x64-mac，故 mac / linux 架构级路由必须先于裸 latest-:arch.yml 注册。
+  // linux 架构段置于平台段之后（latest-linux-arm64.yml），与 electron-updater 原生请求命名一致
 
   @ApiOperation({ summary: 'electron-updater 清单（macOS，架构级；无对应架构包 404）' })
   @Get('electron/latest-:arch-mac.yml')
@@ -69,7 +70,7 @@ export class OpenUpdateController {
   }
 
   @ApiOperation({ summary: 'electron-updater 清单（Linux，架构级；无对应架构包 404）' })
-  @Get('electron/latest-:arch-linux.yml')
+  @Get('electron/latest-linux-:arch.yml')
   async getElectronLatestLinuxByArch(
     @Param('appKey') appKey: string,
     @Param('channel') channel: string,

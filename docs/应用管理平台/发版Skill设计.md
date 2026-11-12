@@ -245,9 +245,9 @@ sequenceDiagram
 ### 10.1 electron（electron-builder）
 
 - 构建：项目自带脚本（`electron-builder` / `build:win` 等），产物目录默认 `dist/`
-- 产物定位：安装包 `*.exe`（nsis）/ `*.dmg` / `*.AppImage` + 同名 `.blockmap` + `latest.yml`
+- 产物定位：安装包 `*.exe`（nsis）/ **`*.zip`（macOS，更新链路只认 zip；dmg 仅首次手动安装、不上传）** / `*.AppImage` + 同名 `.blockmap` + `latest.yml`
 - 产物收集：sha256 / sha512 由脚本流式计算（**与 `latest.yml` 的 sha512 对照**，防产物错位——不一致即停止并报告）；blockmap 推荐上传（客户端白拿差分更新）；`minisign` 不适用
-- 发布校验硬约束（003004003）：包记录必须有 sha512——脚本必算必传，天然满足
+- 发布校验硬约束（003004003）：包记录必须有 sha512——脚本必算必传，天然满足；**macOS 另有 zip 与架构标记约束**——包必须为 zip，且 `arm64` 包文件名须含 `arm64`、`x64` / `universal` 包不得含 `arm64`（客户端按文件名判断架构，见 [多架构更新清单聚合设计](多架构更新清单聚合设计.md) B8）
 
 ### 10.2 tauri（tauri build）
 

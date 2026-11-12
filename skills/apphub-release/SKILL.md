@@ -48,7 +48,7 @@ description: 应用发版助手：向 apphub 应用管理平台发布新版本�
 6. **逐平台上传**：对每个平台执行
    `node scripts/apphub.mjs upload --version {版本} --platform {平台} --arch {架构} --file {安装包路径} [--blockmap {blockmap}] [--sig-file {签名文件}]`
    - **大文件自动分片**：默认 `--multipart auto`——安装包与 blockmap 各自独立判断，严格超过阈值（默认 64 MiB）走 OSS multipart（默认 16 MiB × 并发 4、分片级重试 3 次、单分片 90s 无进展超时），小文件仍单次 PUT；细则见 §1.1
-   - electron 项目建议传 `--blockmap`（客户端获得差分更新）
+   - electron 项目建议传 `--blockmap`（客户端获得差分更新）；macOS 只上传 **zip**（dmg 不上传），文件名须与 `--arch` 匹配（见 §2.1）
    - tauri 项目必须传 `--sig-file`（发布前置校验强制 minisign 签名）
    - 已发布版本的补包 / 换包 / 撤包不重走发布流程，操作见 §3
 7. **确认门（红线）**：发布即客户端可见。向用户呈现发布摘要——版本号 / 通道 / 各平台包与大小 / 更新说明 / 强制标记——明确同意后执行
@@ -84,10 +84,11 @@ CI 可用环境变量覆盖：`APPHUB_MULTIPART` / `APPHUB_MULTIPART_THRESHOLD_B
 
   | platform | arch | 安装包 | 同名 blockmap |
   | --- | --- | --- | --- |
-  | `windows` | `x64` | `*.exe`（nsis） | `*.exe.blockmap` |
-  | `macos` | `universal` / `x64` / `arm64` | `*.dmg` | `*.dmg.blockmap` |
-  | `linux` | `x64` | `*.AppImage` | `*.AppImage.blockmap` |
+  | `windows` | `x64` / `arm64` | `*.exe`（nsis） | `*.exe.blockmap` |
+  | `macos` | `universal` / `x64` / `arm64` | **`*.zip`**（更新链路只认 zip，dmg 仅用于首次手动安装、不上传） | `*.zip.blockmap` |
+  | `linux` | `x64` / `arm64` | `*.AppImage` | `*.AppImage.blockmap` |
 
+- **macOS 命名约束（发布强校验）**：包文件名架构标记须与 `--arch` 一致——`arm64` 包文件名必须含 `arm64`，`x64` / `universal` 包不得含 `arm64`（客户端按文件名判断架构）；electron 应用的 mac 包必须为 `.zip`，否则发布被拒（`300400003`）
 - **sha512 对照（防产物错位，必做）**：脚本会自动计算 sha512；你同时读 `dist/latest.yml`（或 `latest-mac.yml`）中同名 `files[].sha512` 与脚本输出对照——不一致说明定位错文件或产物过期，**停止发版**并报告。
 - `framework=electron` 的包必须登记 sha512（脚本必算必传，天然满足）。
 
@@ -142,7 +143,7 @@ skill 本体（`SKILL.md` + `scripts/`）由平台随发布包部署，经公开
 | `300300005` | 发布校验失败（无可用包） | 至少完成一个平台（非 web）的 upload 再发布 |
 | `300400001` | STS 签发失败 | OSS / STS 平台侧配置问题，报告用户联系平台方 |
 | `300400002` | 平台 / 架构槽位重复 | 已发布版本换包加 `--replace` 重试；草稿也可 remove-package 后重传 |
-| `300400003` | 框架产物缺失 | electron：核对 sha512 对照环节；tauri：核对 `.sig` 是否产出 |
+| `300400003` | 框架产物缺失 | electron：核对 sha512 对照环节；**macOS 包须为 zip 且文件名架构标记与 `--arch` 一致**（arm64 含 arm64，x64 / universal 不含）；tauri：核对 `.sig` 是否产出 |
 | `300400004` | 包对象不存在 | 上传未完成即登记；直接重试 upload |
 | `300400007` | 替换目标不存在 | `--replace` 指向的槽位本无包：去掉 `--replace` 按新增补包重试 |
 | OSS `AccessDenied` | 直传被拒 | 凭证过期（重试会重新签发）或对象键不符；持续失败联系平台方 |

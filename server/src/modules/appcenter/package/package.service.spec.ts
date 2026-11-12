@@ -257,7 +257,7 @@ describe('PackageService（登记）', () => {
     })
     await expect(
       service.register('v1', {
-        platform: 'macos', arch: 'universal', fileName: 'a.dmg',
+        platform: 'macos', arch: 'universal', fileName: 'a-mac.zip',
         objectKey: 'packages/ah_demo/stable/1.3.0/windows-x64/a.exe',
         sha256: 'a'.repeat(64),
       }, USER_ID),

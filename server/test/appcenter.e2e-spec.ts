@@ -696,7 +696,7 @@ describe('AppcenterModule (e2e)', () => {
     // ===== 发布后平台包维护（设计 §3.2.1）=====
 
     // 补包：已发布版本新增 macOS 平台（不影响既有 Windows 候选）
-    const macFileName = 'app-1.3.0.dmg'
+    const macFileName = 'app-1.3.0-universal-mac.zip'
     const macKey = `packages/${appKey}/stable/1.3.0/macos-universal/${macFileName}`
     const macTokenRes = await request(server)
       .post(`/api/appcenter/version/${versionId}/package/upload-token`)

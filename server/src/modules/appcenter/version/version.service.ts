@@ -193,16 +193,8 @@ export class VersionService {
     platform: string
     arch: string | null
   }): Promise<UpdateCandidate | null> {
-    const channel = await this.channelRepository.findOne({
-      where: { appId: input.app.id, code: input.channelCode },
-    })
-    // 通道不存在或停用均视为无候选（?. 短路：无通道时 undefined !== enabled 成立）
-    if (channel?.status !== CHANNEL_STATUS.ENABLED)
-      return null
-    const versions = await this.versionRepository.find({
-      where: { appId: input.app.id, channelId: channel.id, status: VERSION_STATUS.PUBLISHED },
-    })
-    if (versions.length === 0)
+    const versions = await this.findPublishedVersions(input.app.id, input.channelCode)
+    if (!versions)
       return null
     // web 平台无包记录（版本仅登记，更新检测只做提示，设计 §3.3）：版本本身即候选，跳过包过滤
     if (input.platform === PACKAGE_PLATFORM.WEB) {
@@ -230,6 +222,45 @@ export class VersionService {
     candidates.sort((a, b) => rcompare(a.version, b.version))
     const latest = candidates[0]
     return { version: latest, packages: packagesByVersion.get(latest.id) ?? [] }
+  }
+
+  /**
+   * macOS 多架构聚合候选（主张 B3）：版本挂有任一 macos 包（x64 / arm64 / universal）即为候选，
+   * 返回该版本下全部 macos 包，由适配端点按架构聚合渲染 files（主张 B1 / B2）。
+   */
+  async findMacAggregateCandidate(input: { app: AppEntity, channelCode: string }): Promise<UpdateCandidate | null> {
+    const versions = await this.findPublishedVersions(input.app.id, input.channelCode)
+    if (!versions)
+      return null
+    const packages = await this.packageRepository.find({
+      where: {
+        versionId: In(versions.map(version => version.id)),
+        platform: PACKAGE_PLATFORM.MACOS,
+      },
+    })
+    const packagesByVersion = new Map<string, AppPackageEntity[]>()
+    for (const pkg of packages) {
+      const list = packagesByVersion.get(pkg.versionId) ?? []
+      list.push(pkg)
+      packagesByVersion.set(pkg.versionId, list)
+    }
+    const candidates = versions.filter(version => (packagesByVersion.get(version.id)?.length ?? 0) > 0)
+    if (candidates.length === 0)
+      return null
+    candidates.sort((a, b) => rcompare(a.version, b.version))
+    const latest = candidates[0]
+    return { version: latest, packages: packagesByVersion.get(latest.id) ?? [] }
+  }
+
+  /** 通道启用下的已发布版本：通道不存在 / 停用 / 无已发布版本均返回 null */
+  private async findPublishedVersions(appId: string, channelCode: string): Promise<AppVersionEntity[] | null> {
+    const channel = await this.channelRepository.findOne({ where: { appId, code: channelCode } })
+    if (channel?.status !== CHANNEL_STATUS.ENABLED)
+      return null
+    const versions = await this.versionRepository.find({
+      where: { appId, channelId: channel.id, status: VERSION_STATUS.PUBLISHED },
+    })
+    return versions.length > 0 ? versions : null
   }
 
   /** semver 强制校验（MAJOR.MINOR.PATCH，可选预发布后缀） */

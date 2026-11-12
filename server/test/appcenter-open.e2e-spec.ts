@@ -31,6 +31,8 @@ const APP_W_KEY = 'ah_webapp0000000001'
 const APP_D_KEY = 'ah_disabled00000001'
 const APP_RATE_KEY = 'ah_public0000000001'
 const APP_M_KEY = 'ah_macx640000000001'
+const APP_DUAL_KEY = 'ah_dualarm0000000001'
+const APP_MIX_KEY = 'ah_mixedarm000000001'
 
 const apps: Partial<AppEntity>[] = [
   { id: '00000000-0000-4000-8000-0000000000a1', appKey: APP_E_KEY, appSecret: 's1', name: '示例 Electron 应用', appType: ['desktop'], clientType: 'confidential', framework: 'electron', status: 'enabled' },
@@ -39,6 +41,8 @@ const apps: Partial<AppEntity>[] = [
   { id: '00000000-0000-4000-8000-0000000000a4', appKey: APP_D_KEY, appSecret: 's4', name: '已停用应用', appType: ['desktop'], clientType: 'confidential', framework: 'electron', status: 'disabled' },
   { id: '00000000-0000-4000-8000-0000000000a5', appKey: APP_RATE_KEY, appSecret: 's5', name: '限流验证应用', appType: ['desktop'], clientType: 'public', framework: 'custom', status: 'enabled' },
   { id: '00000000-0000-4000-8000-0000000000a6', appKey: APP_M_KEY, appSecret: 's6', name: 'mac x64 专用应用', appType: ['desktop'], clientType: 'confidential', framework: 'electron', status: 'enabled' },
+  { id: '00000000-0000-4000-8000-0000000000a7', appKey: APP_DUAL_KEY, appSecret: 's7', name: 'mac 双架构应用', appType: ['desktop'], clientType: 'confidential', framework: 'electron', status: 'enabled' },
+  { id: '00000000-0000-4000-8000-0000000000a8', appKey: APP_MIX_KEY, appSecret: 's8', name: 'mac 通用 + x64 应用', appType: ['desktop'], clientType: 'confidential', framework: 'electron', status: 'enabled' },
 ]
 const channels: Partial<AppChannelEntity>[] = [
   { id: '00000000-0000-4000-8000-0000000000c1', appId: '00000000-0000-4000-8000-0000000000a1', code: 'stable', name: '稳定', status: 'enabled' },
@@ -47,6 +51,8 @@ const channels: Partial<AppChannelEntity>[] = [
   { id: '00000000-0000-4000-8000-0000000000c4', appId: '00000000-0000-4000-8000-0000000000a4', code: 'stable', name: '稳定', status: 'enabled' },
   { id: '00000000-0000-4000-8000-0000000000c5', appId: '00000000-0000-4000-8000-0000000000a5', code: 'stable', name: '稳定', status: 'enabled' },
   { id: '00000000-0000-4000-8000-0000000000c6', appId: '00000000-0000-4000-8000-0000000000a6', code: 'stable', name: '稳定', status: 'enabled' },
+  { id: '00000000-0000-4000-8000-0000000000c7', appId: '00000000-0000-4000-8000-0000000000a7', code: 'stable', name: '稳定', status: 'enabled' },
+  { id: '00000000-0000-4000-8000-0000000000c8', appId: '00000000-0000-4000-8000-0000000000a8', code: 'stable', name: '稳定', status: 'enabled' },
 ]
 const versions: Partial<AppVersionEntity>[] = [
   { id: '00000000-0000-4000-8000-0000000000v1', appId: '00000000-0000-4000-8000-0000000000a1', channelId: '00000000-0000-4000-8000-0000000000c1', version: '1.0.0', title: '首个版本', notes: '初始发布', forceUpdate: false, status: 'published', publishedAt: new Date('2026-09-01T08:00:00Z') },
@@ -56,14 +62,21 @@ const versions: Partial<AppVersionEntity>[] = [
   { id: '00000000-0000-4000-8000-0000000000v5', appId: '00000000-0000-4000-8000-0000000000a3', channelId: '00000000-0000-4000-8000-0000000000c3', version: '1.0.0', title: '网页版', notes: null, forceUpdate: false, status: 'published', publishedAt: new Date('2026-09-15T08:00:00Z') },
   { id: '00000000-0000-4000-8000-0000000000v6', appId: '00000000-0000-4000-8000-0000000000a4', channelId: '00000000-0000-4000-8000-0000000000c4', version: '1.0.0', title: '停用前版本', notes: null, forceUpdate: false, status: 'published', publishedAt: new Date('2026-08-01T08:00:00Z') },
   { id: '00000000-0000-4000-8000-0000000000v7', appId: '00000000-0000-4000-8000-0000000000a6', channelId: '00000000-0000-4000-8000-0000000000c6', version: '1.0.0', title: 'x64 专用', notes: null, forceUpdate: false, status: 'published', publishedAt: new Date('2026-09-20T08:00:00Z') },
+  { id: '00000000-0000-4000-8000-0000000000v8', appId: '00000000-0000-4000-8000-0000000000a7', channelId: '00000000-0000-4000-8000-0000000000c7', version: '1.0.0', title: '双架构', notes: null, forceUpdate: false, status: 'published', publishedAt: new Date('2026-10-01T08:00:00Z') },
+  { id: '00000000-0000-4000-8000-0000000000v9', appId: '00000000-0000-4000-8000-0000000000a8', channelId: '00000000-0000-4000-8000-0000000000c8', version: '1.0.0', title: '通用 + x64', notes: null, forceUpdate: false, status: 'published', publishedAt: new Date('2026-10-02T08:00:00Z') },
 ]
 const packages: Partial<AppPackageEntity>[] = [
   { id: '00000000-0000-4000-8000-0000000000p1', versionId: '00000000-0000-4000-8000-0000000000v1', platform: 'windows', arch: 'x64', fileName: 'app-1.0.0.exe', fileSize: 1000, sha256: 'a'.repeat(64), sha512: 'c2hhYjY0LWUx', minisignSignature: null, blockmapObjectKey: null, blockmapSha512: null, blockmapFileSize: null, ossObjectKey: `packages/${APP_E_KEY}/stable/1.0.0/windows-x64/app-1.0.0.exe` },
   { id: '00000000-0000-4000-8000-0000000000p2', versionId: '00000000-0000-4000-8000-0000000000v2', platform: 'windows', arch: 'x64', fileName: 'app-1.1.0.exe', fileSize: 2000, sha256: 'b'.repeat(64), sha512: 'c2hhYjY0LWUy', minisignSignature: null, blockmapObjectKey: null, blockmapSha512: null, blockmapFileSize: null, ossObjectKey: `packages/${APP_E_KEY}/stable/1.1.0/windows-x64/app-1.1.0.exe` },
-  { id: '00000000-0000-4000-8000-0000000000p3', versionId: '00000000-0000-4000-8000-0000000000v2', platform: 'macos', arch: 'universal', fileName: 'app-1.1.0.dmg', fileSize: 3000, sha256: 'c'.repeat(64), sha512: 'c2hhYjY0LWUy', minisignSignature: null, blockmapObjectKey: `packages/${APP_E_KEY}/stable/1.1.0/macos-universal/app-1.1.0.dmg.blockmap`, blockmapSha512: 'YmxrLWUybQ==', blockmapFileSize: 100, ossObjectKey: `packages/${APP_E_KEY}/stable/1.1.0/macos-universal/app-1.1.0.dmg` },
+  { id: '00000000-0000-4000-8000-0000000000p3', versionId: '00000000-0000-4000-8000-0000000000v2', platform: 'macos', arch: 'universal', fileName: 'app-1.1.0-mac.zip', fileSize: 3000, sha256: 'c'.repeat(64), sha512: 'c2hhYjY0LWUy', minisignSignature: null, blockmapObjectKey: `packages/${APP_E_KEY}/stable/1.1.0/macos-universal/app-1.1.0-mac.zip.blockmap`, blockmapSha512: 'YmxrLWUybQ==', blockmapFileSize: 100, ossObjectKey: `packages/${APP_E_KEY}/stable/1.1.0/macos-universal/app-1.1.0-mac.zip` },
   { id: '00000000-0000-4000-8000-0000000000p4', versionId: '00000000-0000-4000-8000-0000000000v4', platform: 'windows', arch: 'x64', fileName: 'tauri-app_2.0.0_x64-setup.exe', fileSize: 4000, sha256: 'd'.repeat(64), sha512: null, minisignSignature: 'dW5pbnNpZy1zaWc=', blockmapObjectKey: null, blockmapSha512: null, blockmapFileSize: null, ossObjectKey: `packages/${APP_T_KEY}/stable/2.0.0/windows-x64/tauri-app_2.0.0_x64-setup.exe` },
   { id: '00000000-0000-4000-8000-0000000000p5', versionId: '00000000-0000-4000-8000-0000000000v6', platform: 'windows', arch: 'x64', fileName: 'app-1.0.0.exe', fileSize: 1000, sha256: 'e'.repeat(64), sha512: 'c2hhYjY0LWQx', minisignSignature: null, blockmapObjectKey: null, blockmapSha512: null, blockmapFileSize: null, ossObjectKey: `packages/${APP_D_KEY}/stable/1.0.0/windows-x64/app-1.0.0.exe` },
-  { id: '00000000-0000-4000-8000-0000000000p6', versionId: '00000000-0000-4000-8000-0000000000v7', platform: 'macos', arch: 'x64', fileName: 'app-1.0.0-mac-x64.dmg', fileSize: 3500, sha256: 'f'.repeat(64), sha512: 'c2hhYjY0LW02', minisignSignature: null, blockmapObjectKey: null, blockmapSha512: null, blockmapFileSize: null, ossObjectKey: `packages/${APP_M_KEY}/stable/1.0.0/macos-x64/app-1.0.0-mac-x64.dmg` },
+  { id: '00000000-0000-4000-8000-0000000000p6', versionId: '00000000-0000-4000-8000-0000000000v7', platform: 'macos', arch: 'x64', fileName: 'app-1.0.0-mac.zip', fileSize: 3500, sha256: 'f'.repeat(64), sha512: 'c2hhYjY0LW02', minisignSignature: null, blockmapObjectKey: null, blockmapSha512: null, blockmapFileSize: null, ossObjectKey: `packages/${APP_M_KEY}/stable/1.0.0/macos-x64/app-1.0.0-mac.zip` },
+  { id: '00000000-0000-4000-8000-0000000000p7', versionId: '00000000-0000-4000-8000-0000000000v2', platform: 'linux', arch: 'arm64', fileName: 'app-1.1.0-arm64.AppImage', fileSize: 2500, sha256: 'g'.repeat(64), sha512: 'c2hhYjY0LWw4', minisignSignature: null, blockmapObjectKey: null, blockmapSha512: null, blockmapFileSize: null, ossObjectKey: `packages/${APP_E_KEY}/stable/1.1.0/linux-arm64/app-1.1.0-arm64.AppImage` },
+  { id: '00000000-0000-4000-8000-0000000000p8', versionId: '00000000-0000-4000-8000-0000000000v8', platform: 'macos', arch: 'x64', fileName: 'app-1.0.0-mac.zip', fileSize: 3000, sha256: 'h'.repeat(64), sha512: 'c2hhYjY0LWR1YWw4', minisignSignature: null, blockmapObjectKey: null, blockmapSha512: null, blockmapFileSize: null, ossObjectKey: `packages/${APP_DUAL_KEY}/stable/1.0.0/macos-x64/app-1.0.0-mac.zip` },
+  { id: '00000000-0000-4000-8000-0000000000p9', versionId: '00000000-0000-4000-8000-0000000000v8', platform: 'macos', arch: 'arm64', fileName: 'app-1.0.0-arm64-mac.zip', fileSize: 3200, sha256: 'i'.repeat(64), sha512: 'c2hhYjY0LWR1YWw5', minisignSignature: null, blockmapObjectKey: `packages/${APP_DUAL_KEY}/stable/1.0.0/macos-arm64/app-1.0.0-arm64-mac.zip.blockmap`, blockmapSha512: 'YmxrLWR1YWw5', blockmapFileSize: 90, ossObjectKey: `packages/${APP_DUAL_KEY}/stable/1.0.0/macos-arm64/app-1.0.0-arm64-mac.zip` },
+  { id: '00000000-0000-4000-8000-0000000000p10', versionId: '00000000-0000-4000-8000-0000000000v9', platform: 'macos', arch: 'x64', fileName: 'app-1.0.0-mac.zip', fileSize: 3000, sha256: 'j'.repeat(64), sha512: 'c2hhYjY0LW1peDE=', minisignSignature: null, blockmapObjectKey: null, blockmapSha512: null, blockmapFileSize: null, ossObjectKey: `packages/${APP_MIX_KEY}/stable/1.0.0/macos-x64/app-1.0.0-mac.zip` },
+  { id: '00000000-0000-4000-8000-0000000000p11', versionId: '00000000-0000-4000-8000-0000000000v9', platform: 'macos', arch: 'universal', fileName: 'app-1.0.0-universal-mac.zip', fileSize: 5000, sha256: 'k'.repeat(64), sha512: 'c2hhYjY0LW1peDE=', minisignSignature: null, blockmapObjectKey: null, blockmapSha512: null, blockmapFileSize: null, ossObjectKey: `packages/${APP_MIX_KEY}/stable/1.0.0/macos-universal/app-1.0.0-universal-mac.zip` },
 ]
 
 /** 行匹配 where 等值条件（含 Not / In / IsNull 操作符） */
@@ -228,8 +241,8 @@ describe('AppcenterModule 开放 API (e2e)', () => {
     const manifest = yamlLoad(res.text) as Record<string, unknown>
     const files = manifest.files as { url: string, sha512: string, size: number }[]
     expect(files).toHaveLength(2)
-    expect(files[0].url).toContain('app-1.1.0.dmg')
-    expect(files[1].url).toContain('app-1.1.0.dmg.blockmap')
+    expect(files[0].url).toContain('app-1.1.0-mac.zip')
+    expect(files[1].url).toContain('app-1.1.0-mac.zip.blockmap')
     expect(files[1].sha512).toBe('YmxrLWUybQ==')
     expect(files[1].size).toBe(100)
   })
@@ -238,21 +251,59 @@ describe('AppcenterModule 开放 API (e2e)', () => {
     await request(server).get(`/api/update/${APP_E_KEY}/stable/electron/latest-linux.yml`).expect(404)
   })
 
-  it('electron arch 固定映射：mac 端点只取 universal 槽位（x64 包不命中 404）', async () => {
-    // 契约守护（设计 §3.4）：latest-mac.yml 固定映射 (macos, universal)，不得回退其他 arch
-    await request(server).get(`/api/update/${APP_M_KEY}/stable/electron/latest-mac.yml`).expect(404)
-  })
-
-  it('electron 架构级 mac feed：latest-x64-mac.yml 精确命中 x64 槽位', async () => {
+  it('electron latest-mac.yml：仅分架构包时按聚合语义命中（B2 / B3）', async () => {
+    // 契约变更（多架构聚合设计 B2 / B3）：候选判定放宽为「任一 macos 包」，单 x64 应用不再 404
     const res = await request(server)
-      .get(`/api/update/${APP_M_KEY}/stable/electron/latest-x64-mac.yml`)
+      .get(`/api/update/${APP_M_KEY}/stable/electron/latest-mac.yml`)
       .expect(200)
       .expect('Content-Type', /yaml/)
     const manifest = yamlLoad(res.text) as Record<string, unknown>
     expect(manifest.version).toBe('1.0.0')
-    expect(manifest.path).toBe('app-1.0.0-mac-x64.dmg')
+    expect(manifest.path).toBe('app-1.0.0-mac.zip')
     const files = manifest.files as { url: string }[]
-    expect(files[0].url).toContain(`packages/${APP_M_KEY}/stable/1.0.0/macos-x64/app-1.0.0-mac-x64.dmg`)
+    expect(files).toHaveLength(1)
+    expect(files[0].url).toContain(`packages/${APP_M_KEY}/stable/1.0.0/macos-x64/app-1.0.0-mac.zip`)
+  })
+
+  it('electron latest-mac.yml：分架构发布聚合 x64 + arm64 条目（含 blockmap，B4）', async () => {
+    const res = await request(server)
+      .get(`/api/update/${APP_DUAL_KEY}/stable/electron/latest-mac.yml`)
+      .expect(200)
+    const manifest = yamlLoad(res.text) as Record<string, unknown>
+    expect(manifest.path).toBe('app-1.0.0-mac.zip')
+    const files = manifest.files as { url: string, size: number }[]
+    expect(files).toHaveLength(3)
+    expect(files[0].url).toContain('macos-x64/app-1.0.0-mac.zip')
+    expect(files[1].url).toContain('macos-arm64/app-1.0.0-arm64-mac.zip')
+    expect(files[1].url).not.toContain('.blockmap')
+    expect(files[2].url).toContain('macos-arm64/app-1.0.0-arm64-mac.zip.blockmap')
+    expect(files[2].size).toBe(90)
+  })
+
+  it('electron latest-mac.yml：单架构 + universal 时 universal 前置（B4 顺序守护）', async () => {
+    const res = await request(server)
+      .get(`/api/update/${APP_MIX_KEY}/stable/electron/latest-mac.yml`)
+      .expect(200)
+    const manifest = yamlLoad(res.text) as Record<string, unknown>
+    const files = manifest.files as { url: string }[]
+    expect(files).toHaveLength(2)
+    expect(files[0].url).toContain('macos-universal/app-1.0.0-universal-mac.zip')
+    expect(files[1].url).toContain('macos-x64/app-1.0.0-mac.zip')
+    // 顶层兼容字段取 files[0]（B5）
+    expect(manifest.path).toBe('app-1.0.0-universal-mac.zip')
+  })
+
+  it('electron 架构级 mac feed：latest-x64-mac.yml 精确命中 x64 槽位', async () => {
+    const res = await request(server)
+      .get(`/api/update/${APP_DUAL_KEY}/stable/electron/latest-x64-mac.yml`)
+      .expect(200)
+      .expect('Content-Type', /yaml/)
+    const manifest = yamlLoad(res.text) as Record<string, unknown>
+    expect(manifest.version).toBe('1.0.0')
+    expect(manifest.path).toBe('app-1.0.0-mac.zip')
+    const files = manifest.files as { url: string }[]
+    expect(files).toHaveLength(1)
+    expect(files[0].url).toContain(`packages/${APP_DUAL_KEY}/stable/1.0.0/macos-x64/app-1.0.0-mac.zip`)
   })
 
   it('electron 架构级 feed：槽位无包不回退其他架构（404）', async () => {
@@ -268,18 +319,29 @@ describe('AppcenterModule 开放 API (e2e)', () => {
     const x64 = await request(server)
       .get(`/api/update/${APP_E_KEY}/stable/electron/latest-x64.yml`)
       .expect(200)
-    expect((yamlLoad(universal.text) as Record<string, unknown>).path).toBe('app-1.1.0.dmg')
+    expect((yamlLoad(universal.text) as Record<string, unknown>).path).toBe('app-1.1.0-mac.zip')
     expect((yamlLoad(x64.text) as Record<string, unknown>).path).toBe('app-1.1.0.exe')
+  })
+
+  it('electron 架构级 linux feed：latest-linux-arm64.yml 命中 arm64 槽位（与 updater 原生命名一致）', async () => {
+    const res = await request(server)
+      .get(`/api/update/${APP_E_KEY}/stable/electron/latest-linux-arm64.yml`)
+      .expect(200)
+      .expect('Content-Type', /yaml/)
+    const manifest = yamlLoad(res.text) as Record<string, unknown>
+    expect(manifest.version).toBe('1.1.0')
+    expect(manifest.path).toBe('app-1.1.0-arm64.AppImage')
   })
 
   it('electron 架构级 feed：windows / linux 无对应架构包返回 404', async () => {
     await request(server).get(`/api/update/${APP_E_KEY}/stable/electron/latest-arm64.yml`).expect(404)
-    await request(server).get(`/api/update/${APP_E_KEY}/stable/electron/latest-x64-linux.yml`).expect(404)
+    await request(server).get(`/api/update/${APP_E_KEY}/stable/electron/latest-linux-x64.yml`).expect(404)
   })
 
   it('electron 架构级 feed：未知 arch 视同无该槽位（404）', async () => {
     // 契约守护（设计 §3.4）：白名单外 arch 不做 400 参数校验，统一 404 与 electron-updater 容错语义一致
     await request(server).get(`/api/update/${APP_E_KEY}/stable/electron/latest-ia32-mac.yml`).expect(404)
+    await request(server).get(`/api/update/${APP_E_KEY}/stable/electron/latest-linux-ia32.yml`).expect(404)
     await request(server).get(`/api/update/${APP_E_KEY}/stable/electron/latest-foo.yml`).expect(404)
   })
 

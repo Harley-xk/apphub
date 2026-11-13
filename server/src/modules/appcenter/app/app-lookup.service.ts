@@ -40,9 +40,20 @@ export class AppLookupService implements AppLookupPort {
     if (uniqueIds.length === 0)
       return []
     const apps = await this.appRepository.find({
-      select: ['id', 'appKey', 'name'],
+      select: ['id', 'appKey', 'name', 'status'],
       where: { id: In(uniqueIds) },
     })
-    return apps.map(app => ({ id: app.id, appKey: app.appKey, name: app.name }))
+    return apps.map(app => ({ id: app.id, appKey: app.appKey, name: app.name, status: app.status }))
+  }
+
+  /** 按 AppKey 反查（开放上报解析 appId；软删应用不可见，查无返回 null） */
+  async getByAppKey(appKey: string): Promise<AppOptionVo | null> {
+    if (!appKey)
+      return null
+    const app = await this.appRepository.findOne({
+      select: ['id', 'appKey', 'name', 'status'],
+      where: { appKey },
+    })
+    return app ? { id: app.id, appKey: app.appKey, name: app.name, status: app.status } : null
   }
 }

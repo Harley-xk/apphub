@@ -17,6 +17,17 @@ export interface RateLimitOptions {
    * - path：取 URL 路径参数 appKey（框架内建更新器适配端点，D24——内建更新器无法携带自定义头）
    */
   appKeyFrom: 'header' | 'path'
+  /**
+   * 设备维度来源（可选）：'header' 时限流键改为 `${appKey}:${X-Device-Id}`，
+   * 不再叠加 IP——NAT 后大量设备共享出口 IP 会互相挤占（应用活跃度统计设计 AT13）。
+   * 未携带 X-Device-Id 时以 `unknown` 占位（仍受限）。
+   */
+  deviceFrom?: 'header'
+  /**
+   * 显式阈值（次/窗口）：设置后不受公开客户端阈值减半影响——
+   * 设备维度阈值按设备规划（如活跃上报 120 次/分钟/设备），与调用方类型无关。
+   */
+  limit?: number
 }
 
 /**

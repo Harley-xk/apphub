@@ -41,20 +41,35 @@ export class RateLimitGuard implements CanActivate {
     const ip = getClientIp(request) ?? 'unknown'
     const limit = this.configService.get<number>('rateLimit.limit') ?? 60
     const windowMs = this.configService.get<number>('rateLimit.windowMs') ?? 60_000
+    const device = this.resolveDevice(request, options)
 
-    // 公开客户端（Secret 编译进二进制，暴露风险高）阈值减半，向上取整且保底 1
-    let effectiveLimit = limit
-    if (appKey !== null) {
+    // 公开客户端（Secret 编译进二进制，暴露风险高）阈值减半，向上取整且保底 1；
+    // 显式阈值（设备维度策略）不参与减半——阈值按设备规划，与调用方类型无关
+    let effectiveLimit = options.limit ?? limit
+    if (options.limit === undefined && appKey !== null) {
       const policy = await this.policyRegistry.resolve(appKey)
       if (policy?.clientType === 'public')
         effectiveLimit = Math.max(1, Math.ceil(limit / 2))
     }
 
+    // 设备维度：限流键改为 AppKey + 设备（未带设备头以 unknown 占位）；其余接口维持 AppKey + IP。
     // AppKey 缺失（未携带 / 路径无值）时以 unknown 占位——此类请求依然受限流保护
-    if (!this.counter.tryAcquire(`${appKey ?? 'unknown'}:${ip}`, effectiveLimit, windowMs))
+    const key = device !== null
+      ? `${appKey ?? 'unknown'}:${device}`
+      : `${appKey ?? 'unknown'}:${ip}`
+    if (!this.counter.tryAcquire(key, effectiveLimit, windowMs))
       throw new HttpException('请求过于频繁，请稍后再试', 429)
 
     return true
+  }
+
+  /** 设备维度取值：未启用设备维度返回 null；启用但缺失时返回 unknown 占位（AT13） */
+  private resolveDevice(request: Request, options: RateLimitOptions): string | null {
+    if (options.deviceFrom !== 'header')
+      return null
+    const header = request.headers['x-device-id']
+    const value = Array.isArray(header) ? header[0] : header
+    return typeof value === 'string' && value !== '' ? value : 'unknown'
   }
 
   /** 按 AppKey 来源取值：头（自研协议）或路径参数（框架适配端点，D24） */

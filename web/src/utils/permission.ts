@@ -32,6 +32,7 @@ const DOMAIN_LABELS: Record<string, string> = {
   member: '会员管理',
   credential: '会员凭证',
   overview: '运营工作台',
+  activity: '活跃度统计',
   product: '商品管理',
 }
 

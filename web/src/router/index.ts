@@ -10,6 +10,7 @@ import type { RouteRecordRaw } from 'vue-router'
 
 import DefaultLayout from '@/layouts/default/index.vue'
 
+import { analyticsRoutes } from './modules/analytics'
 import { appcenterRoutes } from './modules/appcenter'
 import { demoRoutes } from './modules/demo'
 import { homeRoutes } from './modules/home'
@@ -43,6 +44,7 @@ declare module 'vue-router' {
 export const layoutChildren: RouteRecordRaw[] = [
   ...homeRoutes,
   ...appcenterRoutes,
+  ...analyticsRoutes,
   ...memberRoutes,
   ...subscriptionRoutes,
   ...systemRoutes,

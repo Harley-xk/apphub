@@ -25,8 +25,15 @@ const PRODUCTION_OK = {
 
 function makeModule(values: Record<string, string | number | boolean | undefined>) {
   const registry = { registerModule: jest.fn() }
-  const module = new MemberModule(makeConfig(values) as never, registry as never)
-  return { module, registry }
+  const memberIdentityRegistry = { register: jest.fn() }
+  const memberIdentityAdapter = { verifyAccessToken: jest.fn() }
+  const module = new MemberModule(
+    makeConfig(values) as never,
+    registry as never,
+    memberIdentityRegistry as never,
+    memberIdentityAdapter as never,
+  )
+  return { module, registry, memberIdentityRegistry }
 }
 
 describe('MemberModule 启动校验（生产 fail-fast，C7 契约守护）', () => {
@@ -35,10 +42,11 @@ describe('MemberModule 启动校验（生产 fail-fast，C7 契约守护）', ()
     expect(() => module.onModuleInit()).not.toThrow()
   })
 
-  it('生产环境配置齐备应正常启动', () => {
-    const { module, registry } = makeModule(PRODUCTION_OK)
+  it('生产环境配置齐备应正常启动并注册会员身份端口', () => {
+    const { module, registry, memberIdentityRegistry } = makeModule(PRODUCTION_OK)
     expect(() => module.onModuleInit()).not.toThrow()
     expect(registry.registerModule).toHaveBeenCalled()
+    expect(memberIdentityRegistry.register).toHaveBeenCalled()
   })
 
   it('生产环境短信通道任一项缺失应拒绝启动', () => {

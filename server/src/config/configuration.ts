@@ -55,6 +55,10 @@ export default () => ({
     // 窗口长度（毫秒），默认 1 分钟
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS ?? String(60 * 1000), 10),
   },
+  analytics: {
+    // 活跃度日表保留月数（AT14 / Q2）：每日清理任务删除超期行，设备表长期保留
+    retentionMonths: parseInt(process.env.ANALYTICS_RETENTION_MONTHS ?? '24', 10),
+  },
   skill: {
     // 发版 skill 分发产物目录（构建时生成到 server/dist/skill/apphub-release；缺省按 dist 结构定位）
     distDir: process.env.SKILL_DIST_DIR ?? '',

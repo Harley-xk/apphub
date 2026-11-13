@@ -6,11 +6,13 @@
  */
 import { Injectable } from '@nestjs/common'
 
-/** 应用精简信息（授权回显与下拉数据源共用：id / appKey / name） */
+/** 应用精简信息（授权回显与下拉数据源共用：id / appKey / name；status 供开放上报做停用兜底） */
 export interface AppOptionVo {
   id: string
   appKey: string
   name: string
+  /** 应用状态：enabled / disabled（可选，按需返回） */
+  status?: string
 }
 
 /**
@@ -24,6 +26,8 @@ export interface AppLookupPort {
   assertAppsExist(appIds: string[]): Promise<void>
   /** 按 id 批量取应用精简信息（仅返回未软删应用，顺序不保证） */
   listAppsByIds(appIds: string[]): Promise<AppOptionVo[]>
+  /** 按 AppKey 反查应用精简信息（开放接口解析 appId；查无 / 已软删返回 null） */
+  getByAppKey(appKey: string): Promise<AppOptionVo | null>
 }
 
 /**

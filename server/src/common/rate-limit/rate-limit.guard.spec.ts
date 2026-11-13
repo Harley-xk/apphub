@@ -20,6 +20,16 @@ class TestController {
     return true
   }
 
+  @RateLimit({ appKeyFrom: 'header', deviceFrom: 'header', limit: 2 })
+  deviceHandler(): boolean {
+    return true
+  }
+
+  @RateLimit({ appKeyFrom: 'header', deviceFrom: 'header', limit: 1 })
+  deviceStrictHandler(): boolean {
+    return true
+  }
+
   plainHandler(): boolean {
     return true
   }
@@ -127,6 +137,47 @@ describe('RateLimitGuard', () => {
     for (let i = 0; i < 2; i++)
       await expect(guard.canActivate(makeContext('headerHandler', request) as never)).resolves.toBe(true)
     await expect(guard.canActivate(makeContext('headerHandler', request) as never)).rejects.toMatchObject({ status: 429 })
+  })
+
+  it('设备维度应按 AppKey + X-Device-Id 独立计数（不叠加 IP）', async () => {
+    const { guard } = makeGuard({ limit: 1 })
+    const first: StubRequest = {
+      headers: { 'x-app-key': 'ah_device', 'x-device-id': 'device-1' },
+      socket: { remoteAddress: '1.1.1.1' },
+    }
+    const second: StubRequest = {
+      headers: { 'x-app-key': 'ah_device', 'x-device-id': 'device-2' },
+      socket: { remoteAddress: '1.1.1.1' },
+    }
+    // 同一出口 IP 的两台设备互不挤占；显式阈值 2 次/设备
+    await expect(guard.canActivate(makeContext('deviceHandler', first) as never)).resolves.toBe(true)
+    await expect(guard.canActivate(makeContext('deviceHandler', second) as never)).resolves.toBe(true)
+    await expect(guard.canActivate(makeContext('deviceHandler', first) as never)).resolves.toBe(true)
+    await expect(guard.canActivate(makeContext('deviceHandler', first) as never)).rejects.toMatchObject({ status: 429 })
+  })
+
+  it('设备维度未携带 X-Device-Id 时应以 unknown 占位且仍受限', async () => {
+    const { guard } = makeGuard({ limit: 1 })
+    const first: StubRequest = { headers: { 'x-app-key': 'ah_device' }, socket: { remoteAddress: '1.1.1.1' } }
+    const second: StubRequest = { headers: { 'x-app-key': 'ah_device' }, socket: { remoteAddress: '2.2.2.2' } }
+    await expect(guard.canActivate(makeContext('deviceStrictHandler', first) as never)).resolves.toBe(true)
+    // 换 IP 不换桶：unknown 设备维度共享同一计数键
+    await expect(guard.canActivate(makeContext('deviceStrictHandler', second) as never)).rejects.toMatchObject({ status: 429 })
+  })
+
+  it('显式阈值不应被公开客户端减半（设备维度阈值按设备规划）', async () => {
+    const { guard } = makeGuard({
+      limit: 10,
+      resolver: () => Promise.resolve({ clientType: 'public' }),
+    })
+    const request: StubRequest = {
+      headers: { 'x-app-key': 'ah_public', 'x-device-id': 'device-1' },
+      socket: { remoteAddress: '4.4.4.4' },
+    }
+    // 显式阈值 2 不被减半：前 2 次放行，第 3 次拒绝
+    await expect(guard.canActivate(makeContext('deviceHandler', request) as never)).resolves.toBe(true)
+    await expect(guard.canActivate(makeContext('deviceHandler', request) as never)).resolves.toBe(true)
+    await expect(guard.canActivate(makeContext('deviceHandler', request) as never)).rejects.toMatchObject({ status: 429 })
   })
 
   it('未注册策略解析器时应按默认阈值处理', async () => {

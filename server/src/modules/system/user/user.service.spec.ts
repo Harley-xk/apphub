@@ -137,6 +137,7 @@ function makeService(options: {
           .filter(appId => visibleAppIds === undefined || visibleAppIds.includes(appId))
           .map(appId => ({ id: appId, appKey: `ah_${appId}`, name: `应用 ${appId}` })),
       ),
+    getByAppKey: () => Promise.resolve(null),
   }
   const service = new UserService(
     userRepository as never,

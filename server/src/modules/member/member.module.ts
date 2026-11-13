@@ -20,6 +20,7 @@ import { isMailConfigured, MailChannelConfig, SmtpMailSender } from './auth/code
 import { LoginLockService } from './auth/login-lock.service'
 import { MemberAuthGuard } from './auth/member-auth.guard'
 import { MemberAuthService } from './auth/member-auth.service'
+import { MemberIdentityAdapter } from './auth/member-identity.adapter'
 import { MemberLoginLogService } from './auth/member-login-log.service'
 import { MEMBER_JWT, MemberTokenService } from './auth/member-token.service'
 import { OpenMemberAuthController } from './auth/open-member-auth.controller'
@@ -31,12 +32,15 @@ import { MemberRefreshTokenEntity } from './entities/member-refresh-token.entity
 import { MemberEntity } from './entities/member.entity'
 import { MEMBER_MODULE_NAME, MEMBER_PERMISSIONS } from './permissions'
 import { DEFAULT_MEMBER_JWT_SECRET } from '../../config/configuration'
+import { MemberIdentityPortsModule, MemberIdentityRegistry } from '../analytics/ports/member-identity.port'
 import { AppEntity } from '../appcenter/entities/app.entity'
 import { SubscriptionModule } from '../subscription/subscription.module'
 import { PermissionRegistry } from '../system/permissions'
 
 @Module({
   imports: [
+    // 会员身份端口注册表（analytics 定义、member 注册实现）：上报链路可选校验会员态
+    MemberIdentityPortsModule,
     // SubscriptionModule 提供 introspect 订阅段真值；M5 起 subscription 开放下单端点需要
     // MemberAuthGuard（下方 exports 导出）——两模块领域互依，双向 forwardRef 解环
     forwardRef(() => SubscriptionModule),
@@ -57,6 +61,7 @@ import { PermissionRegistry } from '../system/permissions'
     LoginLockService,
     MemberLoginLogService,
     MemberAuthGuard,
+    MemberIdentityAdapter,
     MemberTokenService,
     CaptchaService,
     {
@@ -116,11 +121,15 @@ export class MemberModule implements OnModuleInit {
   constructor(
     private readonly configService: ConfigService,
     private readonly permissionRegistry: PermissionRegistry,
+    private readonly memberIdentityRegistry: MemberIdentityRegistry,
+    private readonly memberIdentityAdapter: MemberIdentityAdapter,
   ) {}
 
-  /** 启动期接入权限注册表 + 生产密钥与验证码通道 fail-fast（首段不符 / 串冲突 / 密钥或通道缺配即拒绝启动） */
+  /** 启动期接入权限注册表 + 会员身份端口 + 生产密钥与验证码通道 fail-fast（首段不符 / 串冲突 / 密钥或通道缺配即拒绝启动） */
   onModuleInit(): void {
     this.permissionRegistry.registerModule({ module: MEMBER_MODULE_NAME, points: MEMBER_PERMISSIONS })
+    // analytics 活跃上报的可选会员态校验（端口由 analytics 定义，member 提供实现，设计 §7.2）
+    this.memberIdentityRegistry.register(this.memberIdentityAdapter)
     if (this.configService.get<string>('env') !== 'production') {
       return
     }

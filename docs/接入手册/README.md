@@ -11,6 +11,7 @@
 | 发版自动化（agent / CI 一键打包上传发布） | [发版 Skill](../../skills/apphub-release/SKILL.md)（设计见 [发版 Skill 设计](../应用管理平台/发版Skill设计.md)） | appKey + 发版账号 | 平台开启签名时需要（skill 自动处理） |
 | 用户注册 / 登录 / 身份校验 | [会员认证接入手册](会员认证接入手册.md) | appKey + appSecret | 是（HMAC 请求签名） |
 | 付费订阅（在线支付） | [订阅支付接入手册](订阅支付接入手册.md)（前置：会员认证） | appKey + appSecret | 是（同上） |
+| 客户端使用活跃上报（DAU / MAU / 版本分布） | [应用活跃度接入手册](应用活跃度接入手册.md) | appKey + appSecret | 是（同上；会员态可选） |
 
 订阅链路依赖会员身份（下单需会员令牌），因此接入订阅前须先完成会员认证接入；更新检测与两者完全无关。发版 Skill 走平台管理端接口（应用开发侧项目的 agent 安装 `skills/apphub-release/` 即可完成打包 → 上传 → 发布 → 验证全流程闭环），与更新检测手册面向的客户端接入互补。
 
@@ -30,6 +31,7 @@
 https://appcenter.witice.top/api/open/app/version/check      ← 更新检测
 https://appcenter.witice.top/api/open/member/**              ← 会员认证
 https://appcenter.witice.top/api/open/subscription/**        ← 订阅
+https://appcenter.witice.top/api/open/app/activity/report    ← 应用活跃度上报
 ```
 
 > 基址不含 `/api` 后缀（配置 `baseUrl` 时填 `https://appcenter.witice.top`）。私有化部署或联调环境使用平台方另行提供的基址，下文示例统一按线上基址书写。
@@ -58,10 +60,13 @@ https://appcenter.witice.top/api/open/subscription/**        ← 订阅
 | `300xxxxxx` | 应用与更新 | `300100002` AppKey 无效 |
 | `400xxxxxx` | 会员认证 | `400300001` 账号或密码错误 |
 | `500xxxxxx` | 订阅与支付 | `500100002` 订阅计划已下架 |
+| `700xxxxxx` | 应用活跃度 | `700300002` 单次上报事件超过 50 条 |
 
 ### 2.4 限流
 
 全部开放接口按 **AppKey + IP** 滑动窗口限流，默认 **60 次 / 分钟**；公开客户端（appSecret 编译进客户端二进制分发的形态）阈值减半 **30 次 / 分钟**。超限返回 HTTP 429。接入方应做好 429 的退避重试，不要在收到 429 后立即重发。
+
+**例外：应用活跃度上报**按 **AppKey + `X-Device-Id`** 计数，阈值 **120 次 / 分钟 / 设备**（不叠加 IP，避免 NAT 后设备互相挤占；显式阈值不参与公开客户端减半）。详见[应用活跃度接入手册](应用活跃度接入手册.md) §2.1。
 
 ### 2.5 时钟要求
 

@@ -64,7 +64,7 @@ export const DATA_SCOPE_ALL = 'all'
 export const DATA_SCOPE_APP = 'app'
 
 /** 应用级数据范围的作用域（按域判定，只看授予该域权限的角色——主张 A4） */
-export const APP_SCOPE_DOMAINS = ['appcenter', 'subscription'] as const
+export const APP_SCOPE_DOMAINS = ['appcenter', 'subscription', 'analytics'] as const
 
 /** 应用级数据范围作用域类型 */
 export type AppScopeDomain = (typeof APP_SCOPE_DOMAINS)[number]

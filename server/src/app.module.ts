@@ -26,6 +26,7 @@ import { SignatureGuard } from './common/signature/signature.guard'
 import { SignatureModule } from './common/signature/signature.module'
 import { AuditSubscriber } from './common/subscribers/audit.subscriber'
 import configuration from './config/configuration'
+import { AnalyticsModule } from './modules/analytics/analytics.module'
 import { AppcenterModule } from './modules/appcenter/appcenter.module'
 import { DashboardModule } from './modules/dashboard/dashboard.module'
 import { DemoModule } from './modules/demo/demo.module'
@@ -85,6 +86,8 @@ import { SystemModule } from './modules/system/system.module'
     SystemModule,
     // 应用中心：应用注册与凭证、版本发布、安装包管理与更新检测开放 API（M1）
     AppcenterModule,
+    // 应用活跃度统计：开放上报 + 日表实时 upsert + 只读查询与保留期清理（M8）
+    AnalyticsModule,
     // 运营工作台：首页只读聚合概览（待办 / 指标 / sparkline / 最新动态，M7）
     DashboardModule,
     // 终端用户：会员 / 凭证 / 双令牌、开放 API 认证（M2 密码先行）与管理端接口
